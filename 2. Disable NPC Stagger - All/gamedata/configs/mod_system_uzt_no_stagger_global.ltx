@@ -1,0 +1,29 @@
+; =======================================================================
+; Ultimate Zone Tweaks — Global NPC stagger disable
+; =======================================================================
+; Purpose: Disables the long, hard-coded engine staggering animations 
+; when NPCs take heavy damage. NPCs will only play brief flinch animations.
+; =======================================================================
+
+![stalker]
+critical_wound_threshold	= -1
+critical_wound_decrease_quant = 0
+critical_wound_weights      = 0,0,0
+
+![stalker_monolith]
+critical_wound_threshold	= -1
+critical_wound_decrease_quant = 0
+critical_wound_weights      = 0,0,0
+
+![stalker_zombied]
+critical_wound_threshold	= -1
+critical_wound_decrease_quant = 0
+critical_wound_weights      = 0,0,0
+
+![critical_wound_body_parts_section]
+head = 
+torso = 
+hand_left = 
+hand_right = 
+leg_left = 
+leg_right = 

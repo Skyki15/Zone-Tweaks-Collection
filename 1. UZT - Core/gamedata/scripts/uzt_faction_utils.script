@@ -1,0 +1,115 @@
+-- Shared faction/community helpers for UZT Faction Tweaks.
+
+_G.uzt_faction_utils = _G.uzt_faction_utils or {}
+local utils = _G.uzt_faction_utils
+
+utils.SIN_COMMUNITIES = {
+	greh = true,
+	actor_greh = true
+}
+
+utils.MONOLITH_COMMUNITIES = {
+	monolith = true,
+	actor_monolith = true
+}
+
+function utils.actor_is_valid()
+	if not db or not db.actor or not db.actor.alive or not db.actor:alive() then
+		return false
+	end
+	return true
+end
+
+function utils.get_actor_community(obj)
+	if not obj then
+		return nil
+	end
+
+	if utils.actor_is_valid() and obj:id() == db.actor:id() and get_actor_true_community then
+		local true_com = get_actor_true_community()
+		if true_com and true_com ~= "" then
+			return true_com
+		end
+	end
+
+	if character_community then
+		return character_community(obj)
+	end
+
+	return nil
+end
+
+function utils.community_is_sin(com)
+	return com and utils.SIN_COMMUNITIES[com] == true
+end
+
+function utils.actor_is_sin()
+	if not utils.actor_is_valid() then
+		return false
+	end
+
+	if character_community then
+		local char_com = character_community(db.actor)
+		if utils.community_is_sin(char_com) then
+			return true
+		end
+	end
+
+	return utils.community_is_sin(utils.get_actor_community(db.actor))
+end
+
+function utils.community_is_monolith(com)
+	return com and utils.MONOLITH_COMMUNITIES[com] == true
+end
+
+function utils.actor_is_monolith()
+	if not utils.actor_is_valid() then
+		return false
+	end
+	return utils.community_is_monolith(utils.get_actor_community(db.actor))
+end
+
+function utils.obj_is_monolith(obj)
+	if not obj or IsMonster(obj) then
+		return false
+	end
+	return utils.community_is_monolith(utils.get_actor_community(obj))
+end
+
+function utils.is_mod_enabled()
+	if uzt_faction_mcm and uzt_faction_mcm.is_enabled then
+		return uzt_faction_mcm.is_enabled()
+	end
+	return true
+end
+
+function utils.actor_is_psy_immune()
+	if not utils.is_mod_enabled() then
+		return false
+	end
+
+	if not utils.actor_is_valid() then
+		return false
+	end
+
+	local monolith_immunity = true
+	local sin_immunity = true
+	if uzt_faction_mcm and uzt_faction_mcm.get_config then
+		monolith_immunity = uzt_faction_mcm.get_config("monolith_psy_immunity")
+		sin_immunity = uzt_faction_mcm.get_config("sin_psy_immunity")
+	end
+
+	if utils.actor_is_monolith() then
+		return monolith_immunity == true
+	end
+
+	if utils.actor_is_sin() then
+		return sin_immunity == true
+	end
+
+	return false
+end
+
+function utils.obj_is_sin(obj)
+	return utils.community_is_sin(utils.get_actor_community(obj))
+end

@@ -1,0 +1,350 @@
+-- Ultimate Zone Tweaks — NPC & mutant health scaling (spawn + before_hit)
+
+_G.uzt_health = _G.uzt_health or {}
+local mod = _G.uzt_health
+
+local data = uzt_health_data
+local MCM_ROOT = "uzt/health_tweaks/"
+local MCM_SETTINGS = MCM_ROOT .. "settings/"
+local MCM_STALKER = MCM_ROOT .. "stalker/"
+local MCM_MUTANTS = MCM_ROOT .. "mutants/"
+local APPLY_DELAY = 0.05
+
+mod.settings = mod.settings or {
+	enabled             = false,
+	exclude_story_npcs  = false,
+	exclude_companions  = false,
+	exclude_traders     = false,
+	reapply_on_change   = false,
+	rank_multipliers    = {},
+	species_multipliers = {},
+}
+
+local BOOL_DEFAULTS = {
+	enabled            = false,
+	exclude_story_npcs = false,
+	exclude_companions = false,
+	exclude_traders    = false,
+	reapply_on_change  = false,
+}
+
+local function mcm_path_for_key(key)
+	if key == "enabled" or key == "reapply_on_change" then
+		return MCM_SETTINGS .. key
+	end
+	if key:match("^rank_") or key:match("^exclude_") then
+		return MCM_STALKER .. key
+	end
+	if key:match("^species_") then
+		return MCM_MUTANTS .. key
+	end
+	return MCM_ROOT .. key
+end
+
+local function mcm_get(key)
+	if ui_mcm then
+		local val = ui_mcm.get(mcm_path_for_key(key))
+		if val ~= nil then
+			return val
+		end
+	end
+
+	if BOOL_DEFAULTS[key] ~= nil then
+		return BOOL_DEFAULTS[key]
+	end
+
+	local rank = key:match("^rank_(.+)$")
+	if rank then
+		return data.get_rank_default(rank)
+	end
+
+	local species = key:match("^species_(.+)$")
+	if species then
+		return data.get_species_default(species)
+	end
+
+	return data.DEFAULT_MULT
+end
+
+function mod.load_settings()
+	local s = mod.settings
+
+	s.enabled = mcm_get("enabled") == true
+	s.exclude_story_npcs = mcm_get("exclude_story_npcs") == true
+	s.exclude_companions = mcm_get("exclude_companions") == true
+	s.exclude_traders = mcm_get("exclude_traders") == true
+	s.reapply_on_change = mcm_get("reapply_on_change") == true
+
+	s.rank_multipliers = {}
+	for i = 1, #data.STALKER_RANKS do
+		local rank = data.STALKER_RANKS[i]
+		s.rank_multipliers[rank] = data.clamp_multiplier(mcm_get("rank_" .. rank))
+	end
+
+	s.species_multipliers = {}
+	for i = 1, #data.MUTANT_SPECIES do
+		local species = data.MUTANT_SPECIES[i]
+		s.species_multipliers[species] = data.clamp_multiplier(mcm_get("species_" .. species))
+	end
+end
+
+local function get_settings()
+	return mod.settings
+end
+
+local function get_npc_multiplier(obj)
+	local rank = data.get_stalker_rank(obj)
+	if not rank then
+		return data.DEFAULT_MULT
+	end
+	return get_settings().rank_multipliers[rank] or data.DEFAULT_MULT
+end
+
+local function get_mutant_multiplier(obj, se_obj)
+	local species = data.get_mutant_species(obj, se_obj)
+	if not species then
+		return data.DEFAULT_MULT
+	end
+	return get_settings().species_multipliers[species] or data.DEFAULT_MULT
+end
+
+local function is_story_npc(obj)
+	return get_object_story_id(obj:id()) ~= nil
+end
+
+local function should_skip_npc(obj)
+	if not obj or not obj:alive() then
+		return true
+	end
+
+	if obj:id() == 0 or (db.actor and obj:id() == db.actor:id()) then
+		return true
+	end
+
+	if not IsStalker(obj) then
+		return true
+	end
+
+	local s = get_settings()
+	if s.exclude_traders and IsTrader(obj) then
+		return true
+	end
+
+	if s.exclude_story_npcs and is_story_npc(obj) then
+		return true
+	end
+
+	if s.exclude_companions and obj:has_info("npcx_is_companion") then
+		return true
+	end
+
+	return false
+end
+
+local function should_skip_mutant(obj)
+	if not obj or not obj:alive() then
+		return true
+	end
+
+	return not IsMonster(obj)
+end
+
+local function apply_spawn_health(obj, multiplier)
+	if not obj or not obj:alive() then
+		return
+	end
+
+	multiplier = data.clamp_multiplier(multiplier)
+	if multiplier >= data.DEFAULT_MULT then
+		return
+	end
+
+	obj:set_health_ex(multiplier)
+end
+
+local function reset_spawn_health(obj)
+	if obj and obj:alive() then
+		obj:set_health_ex(data.DEFAULT_MULT)
+	end
+end
+
+local function scale_hit_power(shit, multiplier)
+	if not shit or not shit.power or shit.power <= 0 then
+		return
+	end
+
+	multiplier = data.clamp_multiplier(multiplier)
+	if multiplier <= data.DEFAULT_MULT then
+		return
+	end
+
+	shit.power = shit.power / multiplier
+end
+
+function uzt_health_on_npc_before_hit(npc, shit, bone_id, flags)
+	local s = get_settings()
+	if not s.enabled or not npc then
+		return
+	end
+
+	local ok, alive = pcall(function()
+		return npc:alive()
+	end)
+	if not ok or not alive or should_skip_npc(npc) then
+		return
+	end
+
+	local mult = get_npc_multiplier(npc)
+	if mult <= data.DEFAULT_MULT then
+		return
+	end
+
+	scale_hit_power(shit, mult)
+end
+
+function uzt_health_on_monster_before_hit(monster, shit, bone_id, flags)
+	local s = get_settings()
+	if not s.enabled or not monster then
+		return
+	end
+
+	local ok, alive = pcall(function()
+		return monster:alive()
+	end)
+	if not ok or not alive or should_skip_mutant(monster) then
+		return
+	end
+
+	local mult = get_mutant_multiplier(monster, nil)
+	if mult <= data.DEFAULT_MULT then
+		return
+	end
+
+	scale_hit_power(shit, mult)
+end
+
+local function apply_to_npc(obj)
+	if should_skip_npc(obj) then
+		return
+	end
+
+	apply_spawn_health(obj, get_npc_multiplier(obj))
+end
+
+local function apply_to_mutant(obj, se_obj)
+	if should_skip_mutant(obj) then
+		return
+	end
+
+	apply_spawn_health(obj, get_mutant_multiplier(obj, se_obj))
+end
+
+function uzt_health_delayed_spawn_apply(kind, obj_id)
+	CreateTimeEvent("uzt_health", "spawn_" .. obj_id, APPLY_DELAY, function()
+		local obj = level.object_by_id(obj_id)
+		if not obj then
+			return true
+		end
+
+		if kind == "npc" then
+			apply_to_npc(obj)
+		else
+			apply_to_mutant(obj, nil)
+		end
+
+		return true
+	end)
+end
+
+function uzt_health_on_npc_net_spawn(npc, se_obj)
+	local s = get_settings()
+	if not s.enabled or not npc or should_skip_npc(npc) then
+		return
+	end
+
+	uzt_health_delayed_spawn_apply("npc", npc:id())
+end
+
+function uzt_health_on_monster_net_spawn(obj, se_obj)
+	local s = get_settings()
+	if not s.enabled or not obj or should_skip_mutant(obj) then
+		return
+	end
+
+	uzt_health_delayed_spawn_apply("mutant", obj:id())
+end
+
+local function restore_default_health()
+	for i = 1, #(db.OnlineStalkers or {}) do
+		local obj = level.object_by_id(db.OnlineStalkers[i])
+		if obj and not should_skip_npc(obj) then
+			reset_spawn_health(obj)
+		end
+	end
+
+	for id, st in pairs(db.storage or {}) do
+		local obj = st and st.object or level.object_by_id(id)
+		if obj and obj:alive() and IsMonster(obj) and not should_skip_mutant(obj) then
+			reset_spawn_health(obj)
+		end
+	end
+end
+
+local function reapply_entity(obj, get_mult_fn, skip_fn, se_obj)
+	if skip_fn(obj) then
+		return
+	end
+
+	local mult = get_mult_fn(obj, se_obj)
+	if mult < data.DEFAULT_MULT then
+		apply_spawn_health(obj, mult)
+	else
+		reset_spawn_health(obj)
+	end
+end
+
+local function reapply_online_entities()
+	for i = 1, #(db.OnlineStalkers or {}) do
+		local obj = level.object_by_id(db.OnlineStalkers[i])
+		if obj then
+			reapply_entity(obj, get_npc_multiplier, should_skip_npc, nil)
+		end
+	end
+
+	for id, st in pairs(db.storage or {}) do
+		local obj = st and st.object or level.object_by_id(id)
+		if obj and obj:alive() and IsMonster(obj) then
+			reapply_entity(obj, get_mutant_multiplier, should_skip_mutant, nil)
+		end
+	end
+end
+
+function uzt_health_on_settings_changed()
+	mod.load_settings()
+
+	local s = get_settings()
+	if not s.reapply_on_change then
+		return
+	end
+
+	if not s.enabled then
+		restore_default_health()
+		return
+	end
+
+	reapply_online_entities()
+end
+
+function uzt_health_on_option_change(mcm)
+	uzt_health_on_settings_changed()
+end
+
+function on_game_start()
+	mod.load_settings()
+
+	RegisterScriptCallback("npc_on_net_spawn", uzt_health_on_npc_net_spawn)
+	RegisterScriptCallback("monster_on_net_spawn", uzt_health_on_monster_net_spawn)
+	RegisterScriptCallback("npc_on_before_hit", uzt_health_on_npc_before_hit)
+	RegisterScriptCallback("monster_on_before_hit", uzt_health_on_monster_before_hit)
+	RegisterScriptCallback("on_option_change", uzt_health_on_option_change)
+end

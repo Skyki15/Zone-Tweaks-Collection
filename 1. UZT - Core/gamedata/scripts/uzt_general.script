@@ -1,0 +1,289 @@
+-- Ultimate Zone Tweaks — General gameplay toggles (wounded state, weapon warnings)
+
+_G.uzt_general = _G.uzt_general or {}
+local mod = _G.uzt_general
+
+local MCM_ROOT = "uzt/general/"
+
+mod.settings = mod.settings or {
+	disable_wounded_state = false,
+	exclude_story_npcs    = false,
+	exclude_monolith      = false,
+	disable_weapon_warnings = false,
+}
+
+mod.patches_installed = mod.patches_installed or false
+
+local BOOL_DEFAULTS = {
+	disable_wounded_state = false,
+	exclude_story_npcs    = false,
+	exclude_monolith      = false,
+	disable_weapon_warnings = false,
+}
+
+function mod.load_settings()
+	local s = mod.settings
+
+	if ui_mcm then
+		local wounded = ui_mcm.get(MCM_ROOT .. "disable_wounded_state")
+		s.disable_wounded_state = wounded ~= nil and wounded == true or BOOL_DEFAULTS.disable_wounded_state
+
+		local exclude_story = ui_mcm.get(MCM_ROOT .. "exclude_story_npcs")
+		s.exclude_story_npcs = exclude_story ~= nil and exclude_story == true or BOOL_DEFAULTS.exclude_story_npcs
+
+		local exclude_monolith = ui_mcm.get(MCM_ROOT .. "exclude_monolith")
+		s.exclude_monolith = exclude_monolith ~= nil and exclude_monolith == true or BOOL_DEFAULTS.exclude_monolith
+
+		local warnings = ui_mcm.get(MCM_ROOT .. "disable_weapon_warnings")
+		s.disable_weapon_warnings = warnings ~= nil and warnings == true or BOOL_DEFAULTS.disable_weapon_warnings
+	else
+		s.disable_wounded_state = BOOL_DEFAULTS.disable_wounded_state
+		s.exclude_story_npcs = BOOL_DEFAULTS.exclude_story_npcs
+		s.exclude_monolith = BOOL_DEFAULTS.exclude_monolith
+		s.disable_weapon_warnings = BOOL_DEFAULTS.disable_weapon_warnings
+	end
+end
+
+local function get_settings()
+	return mod.settings
+end
+
+function uzt_general_is_wounded_disabled()
+	return get_settings().disable_wounded_state == true
+end
+
+function uzt_general_is_weapon_warnings_disabled()
+	return get_settings().disable_weapon_warnings == true
+end
+
+-- ---------------------------------------------------------------------------
+-- Disable Wounded State
+-- ---------------------------------------------------------------------------
+
+function uzt_general_is_story_npc(npc)
+	if not npc then
+		return false
+	end
+	return get_object_story_id(npc:id()) ~= nil
+end
+
+function uzt_general_is_monolith_npc(npc)
+	if not (npc and npc.character_community) then
+		return false
+	end
+	return npc:character_community() == "monolith"
+end
+
+function uzt_general_should_disable_wounded(npc)
+	if not uzt_general_is_wounded_disabled() then
+		return false
+	end
+
+	if not (npc and npc.alive and npc:alive() and IsStalker(npc)) then
+		return false
+	end
+
+	if get_settings().exclude_story_npcs and uzt_general_is_story_npc(npc) then
+		return false
+	end
+
+	if get_settings().exclude_monolith and uzt_general_is_monolith_npc(npc) then
+		return false
+	end
+
+	return true
+end
+
+function uzt_general_clear_wound_thresholds(st)
+	if not st then
+		return
+	end
+
+	st.hp_state = {}
+	st.hp_state_see = {}
+	st.psy_state = {}
+	st.hp_victim = {}
+	st.hp_cover = {}
+	st.hp_fight = {}
+end
+
+function uzt_general_reset_wound_manager(npc_id)
+	local npc_storage = npc_id and db.storage[npc_id]
+	if not (npc_storage and npc_storage.wounded and npc_storage.wounded.wound_manager) then
+		return
+	end
+
+	local wm = npc_storage.wounded.wound_manager
+	wm.state = "nil"
+	wm.sound = "nil"
+	wm.fight = "true"
+	wm.victim = "nil"
+	wm.cover = "false"
+	wm.can_use_medkit = false
+end
+
+function uzt_general_clear_wounded_vars(npc)
+	if not npc then
+		return
+	end
+
+	save_var(npc, "wounded_state", nil)
+	save_var(npc, "wounded_sound", nil)
+	save_var(npc, "wounded_fight", nil)
+	save_var(npc, "wounded_victim", nil)
+	save_var(npc, "begin_wounded", nil)
+end
+
+function uzt_general_mark_npc(npc_id, disabled)
+	if not npc_id then
+		return
+	end
+
+	db.storage[npc_id] = db.storage[npc_id] or {}
+	if disabled then
+		db.storage[npc_id].uzt_general_wounded_disabled = true
+	else
+		db.storage[npc_id].uzt_general_wounded_disabled = nil
+	end
+end
+
+function uzt_general_eject_wounded(npc)
+	if not (npc and npc.alive and npc:alive() and IsStalker(npc)) then
+		return
+	end
+
+	local npc_id = npc:id()
+	local wounded_active = false
+
+	if npc.wounded and npc:wounded() then
+		wounded_active = true
+	end
+
+	local state = load_var(npc, "wounded_state")
+	if state and tostring(state) ~= "nil" then
+		wounded_active = true
+	end
+
+	uzt_general_reset_wound_manager(npc_id)
+	uzt_general_clear_wounded_vars(npc)
+
+	if wounded_active or (npc.wounded and npc:wounded()) then
+		npc:wounded(false)
+		npc:movement_enabled(true)
+		if npc.enable_trade then
+			npc:enable_trade()
+		end
+		if npc.disable_talk then
+			npc:disable_talk()
+		end
+	end
+end
+
+function uzt_general_apply_wounded_disable(npc)
+	if not uzt_general_should_disable_wounded(npc) then
+		uzt_general_mark_npc(npc:id(), false)
+		return
+	end
+
+	local npc_id = npc:id()
+	local npc_storage = db.storage[npc_id]
+	if npc_storage and npc_storage.wounded then
+		uzt_general_clear_wound_thresholds(npc_storage.wounded)
+	end
+
+	uzt_general_eject_wounded(npc)
+	uzt_general_mark_npc(npc_id, true)
+end
+
+function uzt_general_on_npc_net_spawn(npc, se_obj)
+	if not uzt_general_is_wounded_disabled() then
+		return
+	end
+
+	if not (npc and npc.alive and npc:alive()) then
+		return
+	end
+	if not IsStalker(npc) then
+		return
+	end
+
+	uzt_general_apply_wounded_disable(npc)
+end
+
+function uzt_general_on_npc_death(npc, who)
+	if not uzt_general_is_wounded_disabled() then
+		return
+	end
+
+	if not npc then
+		return
+	end
+	uzt_general_mark_npc(npc:id(), false)
+end
+
+-- ---------------------------------------------------------------------------
+-- Disable Weapon Warnings
+-- ---------------------------------------------------------------------------
+
+local base_actor_has_weapon = nil
+
+local function uzt_general_install_weapon_warnings_patch()
+	if base_actor_has_weapon then
+		return
+	end
+
+	if not (xr_conditions and xr_conditions.actor_has_weapon) then
+		return
+	end
+
+	base_actor_has_weapon = xr_conditions.actor_has_weapon
+	xr_conditions.actor_has_weapon = function(actor, npc)
+		if uzt_general_is_weapon_warnings_disabled() then
+			return false
+		end
+		return base_actor_has_weapon(actor, npc)
+	end
+end
+
+function uzt_general_install_patches()
+	if mod.patches_installed then
+		return
+	end
+	mod.patches_installed = true
+
+	uzt_general_base_init_wounded = xr_wounded.init_wounded
+	uzt_general_base_reset_generic_scheme = xr_wounded.reset_generic_scheme
+
+	function xr_wounded.init_wounded(npc, ini, section, st, scheme)
+		uzt_general_base_init_wounded(npc, ini, section, st, scheme)
+		if uzt_general_should_disable_wounded(npc) then
+			uzt_general_clear_wound_thresholds(st)
+			uzt_general_eject_wounded(npc)
+			uzt_general_mark_npc(npc:id(), true)
+		end
+	end
+
+	function xr_wounded.reset_generic_scheme(npc, scheme, section, stype, st)
+		uzt_general_base_reset_generic_scheme(npc, scheme, section, stype, st)
+		if st and st.wounded and uzt_general_should_disable_wounded(npc) then
+			uzt_general_clear_wound_thresholds(st.wounded)
+			uzt_general_eject_wounded(npc)
+			uzt_general_mark_npc(npc:id(), true)
+		end
+	end
+
+	uzt_general_install_weapon_warnings_patch()
+end
+
+function uzt_general_on_option_change(mcm)
+	mod.load_settings()
+end
+
+function on_game_start()
+	mod.load_settings()
+	uzt_general_install_patches()
+
+	RegisterScriptCallback("npc_on_net_spawn", uzt_general_on_npc_net_spawn)
+	RegisterScriptCallback("npc_on_death_callback", uzt_general_on_npc_death)
+	RegisterScriptCallback("on_option_change", uzt_general_on_option_change)
+end

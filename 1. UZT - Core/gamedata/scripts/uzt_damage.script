@@ -1,0 +1,104 @@
+-- Ultimate Zone Tweaks — mutant outgoing damage scaling (actor hits only)
+
+_G.uzt_damage = _G.uzt_damage or {}
+local mod = _G.uzt_damage
+
+local health_data = uzt_health_data
+local data = uzt_damage_data
+local MCM_ROOT = "uzt/damage_tweaks/"
+local MCM_SETTINGS = MCM_ROOT .. "settings/"
+local MCM_MUTANTS = MCM_ROOT .. "mutants/"
+
+mod.settings = mod.settings or {
+	enabled             = false,
+	species_multipliers = {},
+}
+
+local function mcm_get(key)
+	if ui_mcm then
+		local path
+		if key == "enabled" then
+			path = MCM_SETTINGS .. key
+		elseif key:match("^species_") then
+			path = MCM_MUTANTS .. key
+		else
+			path = MCM_ROOT .. key
+		end
+		local val = ui_mcm.get(path)
+		if val ~= nil then
+			return val
+		end
+	end
+
+	if key == "enabled" then
+		return false
+	end
+
+	local species = key:match("^species_(.+)$")
+	if species then
+		return data.get_species_default(species)
+	end
+
+	return data.DEFAULT_MULT
+end
+
+function mod.load_settings()
+	local s = mod.settings
+
+	s.enabled = mcm_get("enabled") == true
+
+	s.species_multipliers = {}
+	for i = 1, #health_data.MUTANT_SPECIES do
+		local species = health_data.MUTANT_SPECIES[i]
+		s.species_multipliers[species] = data.clamp_multiplier(mcm_get("species_" .. species))
+	end
+end
+
+local function get_settings()
+	return mod.settings
+end
+
+local function get_mutant_multiplier(attacker)
+	local species = health_data.get_mutant_species(attacker, nil)
+	if not species then
+		return data.DEFAULT_MULT
+	end
+	return get_settings().species_multipliers[species] or data.DEFAULT_MULT
+end
+
+function uzt_damage_on_actor_before_hit(shit, bone_id, flags)
+	local s = get_settings()
+	if not s.enabled or not shit or not shit.power or shit.power <= 0 then
+		return
+	end
+
+	local attacker = shit.draftsman
+	if not attacker then
+		return
+	end
+
+	local ok, alive = pcall(function()
+		return attacker:alive()
+	end)
+	if not ok or not alive or not IsMonster(attacker) then
+		return
+	end
+
+	local mult = get_mutant_multiplier(attacker)
+	if mult == data.DEFAULT_MULT then
+		return
+	end
+
+	shit.power = shit.power * mult
+end
+
+function uzt_damage_on_option_change(mcm)
+	mod.load_settings()
+end
+
+function on_game_start()
+	mod.load_settings()
+
+	RegisterScriptCallback("actor_on_before_hit", uzt_damage_on_actor_before_hit)
+	RegisterScriptCallback("on_option_change", uzt_damage_on_option_change)
+end

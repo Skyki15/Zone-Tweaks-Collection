@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="windows-1251" standalone="yes" ?>
+<string_table>
+	<string id="st_af_uzt_faction_force_shield_name">
+		<text>Cicatrix</text>
+	</string>
+
+	<string id="st_af_uzt_faction_force_shield_descr">
+		<text>A gravitational artifact bonded to every Sin cell fighter at initiation. Worn on the artifact belt, it drags on incoming rounds and bleeds off their velocity before they reach flesh, the stronger the field charge, the more it slows them. Sustained fire frays the pull and drains its charge; when the field collapses, protection fails until the cicatrix knits fully closed again. It recharges slowly while whole, faster while broken. Carrying it in your pack still feeds the field, but only the belt deploys it. Fused to the bearer, cannot be sold, dropped, or stashed.</text>
+	</string>
+
+	<string id="st_af_uzt_faction_force_shield_charge">
+		<text>Shield charge</text>
+	</string>
+
+	<string id="st_af_uzt_faction_force_shield_status_active">
+		<text>active</text>
+	</string>
+
+	<string id="st_af_uzt_faction_force_shield_status_charging">
+		<text>charging</text>
+	</string>
+
+	<string id="st_af_uzt_faction_force_shield_status_standby">
+		<text>standby</text>
+	</string>
+
+	<string id="st_af_uzt_faction_force_shield_status_broken">
+		<text>broken</text>
+	</string>
+</string_table>
