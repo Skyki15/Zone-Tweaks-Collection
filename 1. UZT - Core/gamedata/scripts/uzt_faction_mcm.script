@@ -11,7 +11,6 @@ local defaults = {
 	enabled = false,
 	monolith_psy_immunity = true,
 	monolith_rupture_resistance = 25,
-	sin_psy_immunity = true,
 	sin_max_companions = 3,
 	sin_companion_teleport_dist = 30,
 	sin_squad_escorts_enabled = true,
@@ -29,7 +28,6 @@ local defaults = {
 local def_map = {
 	monolith_psy_immunity = SUB_MONOLITH,
 	monolith_rupture_resistance = SUB_MONOLITH,
-	sin_psy_immunity = SUB_SIN,
 	sin_max_companions = SUB_SIN,
 	sin_companion_teleport_dist = SUB_SIN,
 	sin_squad_escorts_enabled = SUB_SIN,
@@ -176,13 +174,6 @@ local function build_sin_menu()
 				text = "ui_mcm_uzt_faction_sin_title",
 				size = {512, 50},
 				spacing = 20,
-			},
-			{
-				id = "sin_psy_immunity",
-				type = "check",
-				val = 1,
-				def = defaults.sin_psy_immunity,
-				hint = "uzt_faction_sin_psy_immunity",
 			},
 			{ id = "divider_companions", type = "line" },
 			{

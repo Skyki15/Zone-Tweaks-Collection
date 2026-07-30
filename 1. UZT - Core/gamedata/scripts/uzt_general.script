@@ -10,6 +10,8 @@ mod.settings = mod.settings or {
 	exclude_story_npcs    = false,
 	exclude_monolith      = false,
 	disable_weapon_warnings = false,
+	disable_npc_fleeing   = false,
+	disable_companion_fleeing = false,
 }
 
 mod.patches_installed = mod.patches_installed or false
@@ -19,6 +21,8 @@ local BOOL_DEFAULTS = {
 	exclude_story_npcs    = false,
 	exclude_monolith      = false,
 	disable_weapon_warnings = false,
+	disable_npc_fleeing   = false,
+	disable_companion_fleeing = false,
 }
 
 function mod.load_settings()
@@ -36,11 +40,19 @@ function mod.load_settings()
 
 		local warnings = ui_mcm.get(MCM_ROOT .. "disable_weapon_warnings")
 		s.disable_weapon_warnings = warnings ~= nil and warnings == true or BOOL_DEFAULTS.disable_weapon_warnings
+
+		local npc_flee = ui_mcm.get(MCM_ROOT .. "disable_npc_fleeing")
+		s.disable_npc_fleeing = npc_flee ~= nil and npc_flee == true or BOOL_DEFAULTS.disable_npc_fleeing
+
+		local companion_flee = ui_mcm.get(MCM_ROOT .. "disable_companion_fleeing")
+		s.disable_companion_fleeing = companion_flee ~= nil and companion_flee == true or BOOL_DEFAULTS.disable_companion_fleeing
 	else
 		s.disable_wounded_state = BOOL_DEFAULTS.disable_wounded_state
 		s.exclude_story_npcs = BOOL_DEFAULTS.exclude_story_npcs
 		s.exclude_monolith = BOOL_DEFAULTS.exclude_monolith
 		s.disable_weapon_warnings = BOOL_DEFAULTS.disable_weapon_warnings
+		s.disable_npc_fleeing = BOOL_DEFAULTS.disable_npc_fleeing
+		s.disable_companion_fleeing = BOOL_DEFAULTS.disable_companion_fleeing
 	end
 end
 
@@ -54,6 +66,19 @@ end
 
 function uzt_general_is_weapon_warnings_disabled()
 	return get_settings().disable_weapon_warnings == true
+end
+
+function uzt_general_is_npc_fleeing_disabled()
+	return get_settings().disable_npc_fleeing == true
+end
+
+function uzt_general_is_companion_fleeing_disabled()
+	return get_settings().disable_companion_fleeing == true
+end
+
+function uzt_general_any_flee_toggle_enabled()
+	local s = get_settings()
+	return s.disable_npc_fleeing == true or s.disable_companion_fleeing == true
 end
 
 -- ---------------------------------------------------------------------------
@@ -275,8 +300,145 @@ function uzt_general_install_patches()
 	uzt_general_install_weapon_warnings_patch()
 end
 
+-- ---------------------------------------------------------------------------
+-- Disable NPC / companion fleeing
+-- ---------------------------------------------------------------------------
+
+local UZT_EVID_BLOCK_FLEE = xr_evaluators_id.peace_sh_base + 15
+local PANIC_THRESHOLD_NO_FLEE = 0
+local flee_retry_tick = {}
+
+function uzt_general_is_companion(npc)
+	return npc and npc.has_info and npc:has_info("npcx_is_companion") == true
+end
+
+function uzt_general_should_disable_flee(npc)
+	if not (npc and npc.alive and npc:alive() and IsStalker(npc)) then
+		return false
+	end
+
+	if uzt_general_is_companion(npc) then
+		return uzt_general_is_companion_fleeing_disabled()
+	end
+
+	return uzt_general_is_npc_fleeing_disabled()
+end
+
+function uzt_general_block_retreat_action(npc)
+	local mgr = npc:motivation_action_manager()
+	if not (mgr and mgr:initialized()) then
+		return false
+	end
+
+	local npc_id = npc:id()
+	local npc_storage = db.storage[npc_id]
+	if npc_storage and npc_storage.uzt_retreat_blocked then
+		return true
+	end
+
+	local retreat = mgr:action(stalker_ids.action_retreat_from_enemy)
+	if not retreat then
+		return false
+	end
+
+	mgr:add_evaluator(UZT_EVID_BLOCK_FLEE, property_evaluator_const(false))
+	retreat:add_precondition(world_property(UZT_EVID_BLOCK_FLEE, true))
+
+	db.storage[npc_id] = db.storage[npc_id] or {}
+	db.storage[npc_id].uzt_retreat_blocked = true
+	return true
+end
+
+function uzt_general_apply_flee_disable(npc)
+	if not uzt_general_should_disable_flee(npc) then
+		return
+	end
+
+	if npc.set_custom_panic_threshold then
+		npc:set_custom_panic_threshold(PANIC_THRESHOLD_NO_FLEE)
+	end
+
+	uzt_general_block_retreat_action(npc)
+end
+
+function uzt_general_restore_flee_defaults(npc)
+	if not (npc and npc.alive and npc:alive() and IsStalker(npc)) then
+		return
+	end
+
+	if npc.set_default_panic_threshold then
+		npc:set_default_panic_threshold()
+	end
+
+	local npc_storage = db.storage[npc:id()]
+	if npc_storage then
+		npc_storage.uzt_retreat_blocked = nil
+	end
+end
+
+function uzt_general_on_npc_net_spawn_flee(npc, se_obj)
+	if not uzt_general_any_flee_toggle_enabled() then
+		return
+	end
+
+	if not (npc and npc.alive and npc:alive() and IsStalker(npc)) then
+		return
+	end
+
+	uzt_general_apply_flee_disable(npc)
+end
+
+function uzt_general_on_npc_update_flee(npc)
+	if not uzt_general_any_flee_toggle_enabled() then
+		return
+	end
+
+	if not uzt_general_should_disable_flee(npc) then
+		return
+	end
+
+	local npc_id = npc:id()
+	local npc_storage = db.storage[npc_id]
+	if npc_storage and npc_storage.uzt_retreat_blocked then
+		return
+	end
+
+	local now = time_global()
+	if flee_retry_tick[npc_id] and now < flee_retry_tick[npc_id] then
+		return
+	end
+	flee_retry_tick[npc_id] = now + 500
+
+	uzt_general_apply_flee_disable(npc)
+end
+
+function uzt_general_on_npc_death_flee(npc, who)
+	if not npc then
+		return
+	end
+	flee_retry_tick[npc:id()] = nil
+end
+
+function uzt_general_refresh_flee_for_all()
+	if not (db and db.storage) then
+		return
+	end
+
+	for id, npc_storage in pairs(db.storage) do
+		local npc = npc_storage and npc_storage.object
+		if npc and npc.alive and npc:alive() and IsStalker(npc) then
+			if uzt_general_should_disable_flee(npc) then
+				uzt_general_apply_flee_disable(npc)
+			else
+				uzt_general_restore_flee_defaults(npc)
+			end
+		end
+	end
+end
+
 function uzt_general_on_option_change(mcm)
 	mod.load_settings()
+	uzt_general_refresh_flee_for_all()
 end
 
 function on_game_start()
@@ -285,5 +447,8 @@ function on_game_start()
 
 	RegisterScriptCallback("npc_on_net_spawn", uzt_general_on_npc_net_spawn)
 	RegisterScriptCallback("npc_on_death_callback", uzt_general_on_npc_death)
+	RegisterScriptCallback("npc_on_net_spawn", uzt_general_on_npc_net_spawn_flee)
+	RegisterScriptCallback("npc_on_update", uzt_general_on_npc_update_flee)
+	RegisterScriptCallback("npc_on_death_callback", uzt_general_on_npc_death_flee)
 	RegisterScriptCallback("on_option_change", uzt_general_on_option_change)
 end

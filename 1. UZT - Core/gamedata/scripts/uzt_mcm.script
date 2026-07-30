@@ -238,6 +238,27 @@ local function build_general_menu()
 				def = false,
 				hint = "uzt_general_disable_weapon_warnings",
 			},
+			{ id = "divider_fleeing", type = "line" },
+			{
+				id = "disable_npc_fleeing",
+				type = "check",
+				val = 1,
+				def = false,
+				hint = "uzt_general_disable_npc_fleeing",
+			},
+			{
+				id = "disable_companion_fleeing",
+				type = "check",
+				val = 1,
+				def = false,
+				hint = "uzt_general_disable_companion_fleeing",
+			},
+			{
+				id = "fleeing_compat_desc",
+				type = "desc",
+				text = "ui_mcm_uzt_general_fleeing_compat_desc",
+				clr = {255, 150, 150, 150},
+			},
 		},
 	}
 end

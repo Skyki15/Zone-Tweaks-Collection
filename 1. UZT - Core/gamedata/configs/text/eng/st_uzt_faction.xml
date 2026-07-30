@@ -17,7 +17,7 @@
 	</string>
 
 	<string id="ui_mcm_uzt_faction_enabled_desc">
-		<text>Master switch for all Monolith and SiN faction tweaks below. When off, psy immunity, rupture resistance, mutant companions, escorts, and Force Shield are disabled.</text>
+		<text>Master switch for all Monolith and SiN faction tweaks below. When off, Monolith psy immunity, rupture resistance, mutant companions, escorts, and Force Shield are disabled.</text>
 	</string>
 
 	<string id="ui_mcm_uzt_faction_monolith_title">
@@ -42,10 +42,6 @@
 
 	<string id="ui_mcm_uzt_faction_monolith_rupture_resistance_desc">
 		<text>Damage reduction from melee, cuts, and explosions for Monolith stalkers (0-50%)</text>
-	</string>
-
-	<string id="ui_mcm_uzt_faction_sin_psy_immunity">
-		<text>Sin psy field immunity</text>
 	</string>
 
 	<string id="ui_mcm_uzt_faction_sin_max_companions">

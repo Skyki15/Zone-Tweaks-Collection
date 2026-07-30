@@ -93,18 +93,12 @@ function utils.actor_is_psy_immune()
 	end
 
 	local monolith_immunity = true
-	local sin_immunity = true
 	if uzt_faction_mcm and uzt_faction_mcm.get_config then
 		monolith_immunity = uzt_faction_mcm.get_config("monolith_psy_immunity")
-		sin_immunity = uzt_faction_mcm.get_config("sin_psy_immunity")
 	end
 
 	if utils.actor_is_monolith() then
 		return monolith_immunity == true
-	end
-
-	if utils.actor_is_sin() then
-		return sin_immunity == true
 	end
 
 	return false
