@@ -1,0 +1,224 @@
+-- Monolith easier companion recruitment (ZTC Faction Tweaks).
+
+_G.ztc_faction_monolith_companion_recruit = _G.ztc_faction_monolith_companion_recruit or {}
+local recruit = _G.ztc_faction_monolith_companion_recruit
+
+local DIALOG_ID = "ztc_monolith_companion_recruit_dialog"
+local VANILLA_DIALOG_ID = "friendly_companion_dialog"
+local patches_installed = false
+
+function recruit.is_character_id_monolith(character_id)
+	if not character_id or character_id == "actor_monolith" then
+		return false
+	end
+	return string.find(character_id, "monolith", 1, true) ~= nil
+end
+
+function recruit.is_enabled(actor, npc)
+	return ztc_faction_utils.is_monolith_easier_companion_recruit_enabled()
+end
+
+function recruit.is_monolith_actor(actor, npc)
+	if not ztc_faction_utils.actor_is_valid() then
+		return false
+	end
+	return ztc_faction_utils.actor_is_monolith()
+end
+
+function recruit.is_monolith_npc(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	if not who then
+		return false
+	end
+	return ztc_faction_utils.obj_is_monolith(who)
+end
+
+function recruit.can_recruit_relation(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	if not who then
+		return false
+	end
+
+	local relation = who:relation(db.actor)
+	return relation == game_object.friend or relation == game_object.neutral
+end
+
+-- Field / ALife squads only (debug-spawned loners have no squad and break companion logic).
+function recruit.is_recruit_target(actor, npc)
+	if not recruit.is_monolith_npc(actor, npc) then
+		return false
+	end
+
+	local who = dialogs.who_is_npc(actor, npc)
+	if not who then
+		return false
+	end
+
+	if get_object_story_id(who:id()) then
+		return false
+	end
+
+	local squad = get_object_squad(who)
+	if not squad then
+		return false
+	end
+
+	if get_object_story_id(squad.id) then
+		return false
+	end
+
+	return squad:commander_id() == who:id()
+end
+
+function recruit.recruit_companion(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	if not who or not who:alive() then
+		return
+	end
+
+	if not recruit.is_recruit_target(actor, npc) then
+		return
+	end
+
+	if dialogs_axr_companion and dialogs_axr_companion.become_actor_companion then
+		dialogs_axr_companion.become_actor_companion(actor, who)
+	end
+end
+
+local function recruit_bypasses_vanilla_friend_gate(actor, npc)
+	if not ztc_faction_utils.is_monolith_easier_companion_recruit_enabled(true) then
+		return false
+	end
+	if not recruit.is_recruit_target(actor, npc) then
+		return false
+	end
+	return recruit.can_recruit_relation(actor, npc)
+end
+
+local function safe_wrap_global(fn_name, fallback)
+	local base = _G[fn_name]
+	if not base or recruit["_" .. fn_name] then
+		return
+	end
+
+	recruit["_" .. fn_name] = base
+	_G[fn_name] = function(...)
+		local ok, result = pcall(base, ...)
+		if ok then
+			return result
+		end
+		if fallback then
+			return fallback(...)
+		end
+		return false
+	end
+end
+
+local function install_guide_prec_safety()
+	safe_wrap_global("is_guider_companion", function()
+		return false
+	end)
+	safe_wrap_global("is_not_guider_companion", function()
+		return true
+	end)
+	safe_wrap_global("prec_1", function()
+		return false
+	end)
+	safe_wrap_global("not_prec_1", function()
+		return true
+	end)
+	safe_wrap_global("prec_2", function()
+		return false
+	end)
+	safe_wrap_global("prec_3", function()
+		return false
+	end)
+	safe_wrap_global("prec_4", function()
+		return false
+	end)
+	safe_wrap_global("prec_5", function()
+		return false
+	end)
+
+	safe_wrap_global("get_phrase_start_1", function()
+		if game and game.translate_string then
+			return game.translate_string("st_jg_1")
+		end
+		return ""
+	end)
+
+	safe_wrap_global("get_phrase_start_2", function()
+		if game and game.translate_string then
+			return game.translate_string("st_jg_2")
+		end
+		return ""
+	end)
+
+	safe_wrap_global("get_phrase_1", function()
+		return ""
+	end)
+
+	safe_wrap_global("get_phrase2", function()
+		return ""
+	end)
+
+	safe_wrap_global("get_phrase3", function()
+		if game and game.translate_string then
+			return game.translate_string("st_jg_cancel_1")
+		end
+		return ""
+	end)
+end
+
+local function install_companion_patches()
+	if patches_installed then
+		return
+	end
+	if not (dialogs_axr_companion and dialogs_axr_companion.is_actor_friend and dialogs_axr_companion.is_non_story) then
+		return
+	end
+
+	patches_installed = true
+	recruit._base_is_actor_friend = dialogs_axr_companion.is_actor_friend
+	recruit._base_is_non_story = dialogs_axr_companion.is_non_story
+
+	function dialogs_axr_companion.is_actor_friend(actor, npc)
+		if recruit_bypasses_vanilla_friend_gate(actor, npc) then
+			return true
+		end
+		return recruit._base_is_actor_friend(actor, npc)
+	end
+
+	function dialogs_axr_companion.is_non_story(actor, npc)
+		if recruit_bypasses_vanilla_friend_gate(actor, npc) then
+			return true
+		end
+		return recruit._base_is_non_story(actor, npc)
+	end
+end
+
+function ztc_faction_monolith_companion_recruit_on_dialog_list(character_id, dialog_list)
+	if not ztc_faction_utils.is_monolith_easier_companion_recruit_enabled(true) then
+		return
+	end
+	if not recruit.is_character_id_monolith(character_id) then
+		return
+	end
+	if not dialog_list or not dialog_list.add then
+		return
+	end
+
+	if not (dialog_list.has and dialog_list:has(DIALOG_ID)) then
+		dialog_list:add(DIALOG_ID)
+	end
+
+	if dialog_list.remove then
+		dialog_list:remove(VANILLA_DIALOG_ID)
+	end
+end
+
+function on_game_start()
+	install_guide_prec_safety()
+	install_companion_patches()
+	RegisterScriptCallback("on_specific_character_dialog_list", ztc_faction_monolith_companion_recruit_on_dialog_list)
+end

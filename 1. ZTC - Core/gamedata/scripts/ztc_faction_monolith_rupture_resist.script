@@ -1,0 +1,74 @@
+-- Monolith passive rupture resistance (melee, cuts, explosions).
+
+local function ztc_faction_get_rupture_reduction_percent(config_key)
+	if ztc_faction_utils and ztc_faction_utils.is_mod_enabled and not ztc_faction_utils.is_mod_enabled() then
+		return 0
+	end
+
+	if not ztc_faction_mcm or not ztc_faction_mcm.get_config then
+		return 0
+	end
+
+	local pct = tonumber(ztc_faction_mcm.get_config(config_key)) or 0
+	if pct < 0 then
+		pct = 0
+	elseif pct > 50 then
+		pct = 50
+	end
+	return pct
+end
+
+local function ztc_faction_get_damage_mult(config_key)
+	return 1.0 - (ztc_faction_get_rupture_reduction_percent(config_key) / 100.0)
+end
+
+local function ztc_faction_is_rupture_hit(shit)
+	if not shit or not shit.type or not hit then
+		return false
+	end
+
+	local hit_type = shit.type
+	return hit_type == hit.strike
+		or hit_type == hit.wound
+		or hit_type == hit.explosion
+end
+
+local function ztc_faction_apply_rupture_reduction(shit, config_key)
+	if not ztc_faction_is_rupture_hit(shit) then
+		return
+	end
+	if not shit.power or shit.power <= 0 then
+		return
+	end
+
+	local mult = ztc_faction_get_damage_mult(config_key)
+	if mult >= 1.0 then
+		return
+	end
+
+	shit.power = shit.power * mult
+end
+
+function ztc_faction_rupture_actor_on_before_hit(shit, bone_id, flags)
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
+		return
+	end
+	if not ztc_faction_utils.actor_is_monolith() then
+		return
+	end
+
+	ztc_faction_apply_rupture_reduction(shit, "monolith_rupture_resistance_actor")
+end
+
+function ztc_faction_rupture_npc_on_before_hit(npc, shit, bone_id, flags)
+	if not npc or not ztc_faction_utils or not ztc_faction_utils.obj_is_monolith(npc) then
+		return
+	end
+
+	ztc_faction_apply_rupture_reduction(shit, "monolith_rupture_resistance_npc")
+end
+
+function on_game_start()
+	RegisterScriptCallback("actor_on_before_hit", ztc_faction_rupture_actor_on_before_hit)
+	RegisterScriptCallback("npc_on_before_hit", ztc_faction_rupture_npc_on_before_hit)
+end

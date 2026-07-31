@@ -1,0 +1,614 @@
+; =======================================================================
+; Zone Tweaks Collection — NPC stagger disable (engine)
+; =======================================================================
+; Alife NPCs use sim_default_<faction>_* spawn sections (:stalker), not only
+; base stalker profiles. Patch spawn sections per faction so squads spawned
+; through simulation get critical_wound disabled (no long stagger animations).
+; =======================================================================
+
+; --- Loner ---
+![sim_default_stalker_0]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_stalker_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_stalker_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_stalker_3]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_stalker_4]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_stalker_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_stalker_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_stalker_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_stalker_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![companion_survival_stalker]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+; --- Bandit ---
+![sim_default_bandit_0]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_bandit_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_bandit_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_bandit_3]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_bandit_4]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_bandit_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_bandit_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_bandit_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_bandit_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![companion_survival_bandit]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+; --- Clear Sky ---
+![sim_default_csky_0]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_csky_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_csky_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_csky_3]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_csky_4]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_csky_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_csky_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_csky_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_csky_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![companion_survival_csky]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+; --- Duty ---
+![sim_default_duty_0]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_duty_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_duty_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_duty_3]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_duty_4]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_dolg_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_dolg_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_dolg_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_dolg_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![companion_survival_duty]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+; --- Freedom ---
+![sim_default_freedom_0]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_freedom_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_freedom_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_freedom_3]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_freedom_4]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_freedom_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_freedom_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_freedom_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_freedom_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![companion_survival_freedom]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+; --- Mercenaries ---
+![sim_default_killer_0]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_killer_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_killer_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_killer_3]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_killer_4]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_killer_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_killer_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_killer_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_killer_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![companion_survival_killer]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+; --- Military ---
+![sim_default_military_0]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_military_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_military_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_military_3]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_military_4]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_military_3_sniper]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_army_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_army_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_army_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_army_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![companion_survival_army]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+; --- Ecologist ---
+![sim_default_ecolog_01]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_ecolog_0]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_ecolog_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_ecolog_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_ecolog_3]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_ecolog_4]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_ecolog_5]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_ecolog_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_ecolog_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_ecolog_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_ecolog_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![companion_survival_ecolog]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+; --- Monolith ---
+![sim_default_monolith_0]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_monolith_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_monolith_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_monolith_3]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_monolith_4]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_monolith_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_monolith_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_monolith_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_monolith_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![stalker_monolith]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![stalker_monolith_default]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![companion_survival_monolith]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+; --- Renegades ---
+![sim_default_renegade_0]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_renegade_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_renegade_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_renegade_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_renegade_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_renegade_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_renegade_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+; --- SiN ---
+![sim_default_greh_0]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_greh_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_greh_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_greh_3]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_greh_4]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_greh_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_greh_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_greh_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_greh_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+; --- UNISG ---
+![sim_default_isg_1]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_isg_2]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_isg_3]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_isg_4]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_isg_trader]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_isg_mechanic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_isg_medic]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0
+
+![sim_default_isg_barman]
+critical_wound_threshold		= -1
+critical_wound_decrease_quant	= 0
+critical_wound_weights			= 0,0,0

@@ -1,0 +1,21 @@
+-- Late UI hooks for Cicatrix charge display.
+
+function ztc_faction_fs_ui_on_show(name)
+	if name ~= "UIInventory" then
+		return
+	end
+	if ztc_faction_force_shield and ztc_faction_force_shield.try_install_ui_hooks then
+		ztc_faction_force_shield.try_install_ui_hooks()
+	end
+end
+
+function on_game_start()
+	RegisterScriptCallback("GUI_on_show", ztc_faction_fs_ui_on_show)
+
+	CreateTimeEvent("ztc_faction_fs_ui_late_hook", "go", 2.0, function()
+		if ztc_faction_force_shield and ztc_faction_force_shield.try_install_ui_hooks then
+			ztc_faction_force_shield.try_install_ui_hooks()
+		end
+		return true
+	end)
+end

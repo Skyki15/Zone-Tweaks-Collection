@@ -1,0 +1,398 @@
+-- Zone Tweaks Collection — Faction Tweaks MCM
+
+_G.ztc_faction_mcm = _G.ztc_faction_mcm or {}
+local mcm = _G.ztc_faction_mcm
+
+local MCM_ROOT = "ztc/faction_tweaks/"
+local SUB_MONOLITH = "monolith"
+local SUB_SIN = "sin"
+
+local defaults = {
+	enabled = false,
+	monolith_psy_immunity = false,
+	monolith_easier_companion_recruit = false,
+	monolith_rupture_resistance_actor = 20,
+	monolith_rupture_resistance_npc = 30,
+	sin_mutant_alliance_enabled = false,
+	sin_max_companions = 3,
+	sin_companion_teleport_dist = 30,
+	sin_squad_escorts_enabled = false,
+	sin_squad_escort_chance = 40,
+	sin_squad_escorts_max_per_squad = 1,
+	sin_squad_escorts_max_active = 6,
+	force_shield_actor_enabled = false,
+	force_shield_npc_enabled = false,
+	force_shield_player_bullet_reduction = 40,
+	force_shield_npc_bullet_reduction = 60,
+	force_shield_recharge_normal_sec = 5,
+	force_shield_recharge_broken_sec = 2,
+	force_shield_debug_log = false,
+}
+
+local def_map = {
+	monolith_psy_immunity = SUB_MONOLITH,
+	monolith_easier_companion_recruit = SUB_MONOLITH,
+	monolith_rupture_resistance_actor = SUB_MONOLITH,
+	monolith_rupture_resistance_npc = SUB_MONOLITH,
+	sin_mutant_alliance_enabled = SUB_SIN,
+	sin_max_companions = SUB_SIN,
+	sin_companion_teleport_dist = SUB_SIN,
+	sin_squad_escorts_enabled = SUB_SIN,
+	sin_squad_escort_chance = SUB_SIN,
+	sin_squad_escorts_max_per_squad = SUB_SIN,
+	sin_squad_escorts_max_active = SUB_SIN,
+	force_shield_actor_enabled = SUB_SIN,
+	force_shield_npc_enabled = SUB_SIN,
+	force_shield_player_bullet_reduction = SUB_SIN,
+	force_shield_npc_bullet_reduction = SUB_SIN,
+	force_shield_recharge_normal_sec = SUB_SIN,
+	force_shield_recharge_broken_sec = SUB_SIN,
+	force_shield_debug_log = SUB_SIN,
+}
+
+local MCM_SETTINGS = MCM_ROOT .. "settings/"
+
+function mcm.is_enabled()
+	if ui_mcm then
+		local val = ui_mcm.get(MCM_SETTINGS .. "enabled")
+		if val ~= nil then
+			return val == true
+		end
+	end
+	return defaults.enabled == true
+end
+
+function mcm.get_config(key)
+	if key == "enabled" then
+		return mcm.is_enabled()
+	end
+
+	if not mcm.is_enabled() then
+		if key == "monolith_rupture_resistance_actor" or key == "monolith_rupture_resistance_npc" then
+			return 0
+		end
+		if defaults[key] ~= nil and type(defaults[key]) == "boolean" then
+			return false
+		end
+		return nil
+	end
+
+	if ui_mcm then
+		local section = def_map[key]
+		if section then
+			local val = ui_mcm.get(MCM_ROOT .. section .. "/" .. key)
+			if val ~= nil then
+				return val
+			end
+		end
+
+		local val = ui_mcm.get(MCM_ROOT .. key)
+		if val ~= nil then
+			return val
+		end
+	end
+
+	if defaults[key] ~= nil then
+		return defaults[key]
+	end
+
+	return nil
+end
+
+local function build_faction_settings_menu()
+	return {
+		id = "settings",
+		sh = true,
+		gr = {
+			{
+				id = "title",
+				type = "slide",
+				link = "ui_options_slider_disguise",
+				text = "ui_mcm_ztc_faction_general_title",
+				size = {512, 50},
+				spacing = 20,
+			},
+			{ id = "divider_main", type = "line" },
+			{
+				id = "enabled",
+				type = "check",
+				val = 1,
+				def = defaults.enabled,
+				hint = "ztc_faction_enabled",
+			},
+			{
+				id = "enabled_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_enabled_desc",
+				clr = {255, 200, 200, 200},
+			},
+		},
+	}
+end
+
+local function build_monolith_menu()
+	return {
+		id = SUB_MONOLITH,
+		sh = true,
+		gr = {
+			{
+				id = "title",
+				type = "slide",
+				link = "ui_options_slider_disguise",
+				text = "ui_mcm_ztc_faction_monolith_title",
+				size = {512, 50},
+				spacing = 20,
+			},
+			{
+				id = "monolith_psy_immunity",
+				type = "check",
+				val = 1,
+				def = defaults.monolith_psy_immunity,
+				hint = "ztc_faction_monolith_psy_immunity",
+			},
+			{
+				id = "monolith_easier_companion_recruit",
+				type = "check",
+				val = 1,
+				def = defaults.monolith_easier_companion_recruit,
+				hint = "ztc_faction_monolith_easier_companion_recruit",
+			},
+			{
+				id = "monolith_easier_companion_recruit_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_monolith_easier_companion_recruit_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "monolith_rupture_resistance_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_monolith_rupture_resistance_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "monolith_rupture_resistance_actor",
+				type = "track",
+				val = 2,
+				min = 0,
+				max = 50,
+				step = 1,
+				def = defaults.monolith_rupture_resistance_actor,
+				hint = "ztc_faction_monolith_rupture_resistance_actor",
+			},
+			{
+				id = "monolith_rupture_resistance_npc",
+				type = "track",
+				val = 2,
+				min = 0,
+				max = 50,
+				step = 1,
+				def = defaults.monolith_rupture_resistance_npc,
+				hint = "ztc_faction_monolith_rupture_resistance_npc",
+			},
+		},
+	}
+end
+
+local function build_sin_menu()
+	return {
+		id = SUB_SIN,
+		sh = true,
+		gr = {
+			{
+				id = "title",
+				type = "slide",
+				link = "ui_options_slider_disguise",
+				text = "ui_mcm_ztc_faction_sin_title",
+				size = {512, 50},
+				spacing = 20,
+			},
+			{
+				id = "sin_mutant_alliance_enabled",
+				type = "check",
+				val = 1,
+				def = defaults.sin_mutant_alliance_enabled,
+				hint = "ztc_faction_sin_mutant_alliance_enabled",
+			},
+			{
+				id = "sin_mutant_alliance_enabled_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_sin_mutant_alliance_enabled_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{ id = "divider_companions", type = "line" },
+			{
+				id = "sin_max_companions_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_sin_max_companions_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "sin_max_companions",
+				type = "track",
+				val = 2,
+				min = 1,
+				max = 10,
+				step = 1,
+				def = defaults.sin_max_companions,
+				hint = "ztc_faction_sin_max_companions",
+			},
+			{
+				id = "sin_companion_teleport_dist_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_sin_companion_teleport_dist_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "sin_companion_teleport_dist",
+				type = "track",
+				val = 2,
+				min = 5,
+				max = 50,
+				step = 5,
+				def = defaults.sin_companion_teleport_dist,
+				hint = "ztc_faction_sin_companion_teleport_dist",
+			},
+			{ id = "divider_sin_escorts", type = "line" },
+			{
+				id = "sin_squad_escorts_enabled",
+				type = "check",
+				val = 1,
+				def = defaults.sin_squad_escorts_enabled,
+				hint = "ztc_faction_sin_squad_escorts_enabled",
+			},
+			{
+				id = "sin_squad_escort_chance_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_sin_squad_escort_chance_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "sin_squad_escort_chance",
+				type = "track",
+				val = 2,
+				min = 0,
+				max = 100,
+				step = 5,
+				def = defaults.sin_squad_escort_chance,
+				hint = "ztc_faction_sin_squad_escort_chance",
+			},
+			{
+				id = "sin_squad_escorts_max_per_squad",
+				type = "track",
+				val = 2,
+				min = 1,
+				max = 3,
+				step = 1,
+				def = defaults.sin_squad_escorts_max_per_squad,
+				hint = "ztc_faction_sin_squad_escorts_max_per_squad",
+			},
+			{
+				id = "sin_squad_escorts_max_active",
+				type = "track",
+				val = 2,
+				min = 4,
+				max = 20,
+				step = 1,
+				def = defaults.sin_squad_escorts_max_active,
+				hint = "ztc_faction_sin_squad_escorts_max_active",
+			},
+			{ id = "divider_force_shield", type = "line" },
+			{
+				id = "force_shield_actor_enabled",
+				type = "check",
+				val = 1,
+				def = defaults.force_shield_actor_enabled,
+				hint = "ztc_faction_force_shield_actor_enabled",
+			},
+			{
+				id = "force_shield_actor_enabled_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_force_shield_actor_enabled_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "force_shield_player_bullet_reduction",
+				type = "track",
+				val = 2,
+				min = 10,
+				max = 80,
+				step = 5,
+				def = defaults.force_shield_player_bullet_reduction,
+				hint = "ztc_faction_force_shield_player_bullet_reduction",
+			},
+			{
+				id = "force_shield_recharge_normal_sec_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_force_shield_recharge_normal_sec_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "force_shield_recharge_normal_sec",
+				type = "track",
+				val = 2,
+				min = 1,
+				max = 60,
+				step = 1,
+				def = defaults.force_shield_recharge_normal_sec,
+				hint = "ztc_faction_force_shield_recharge_normal_sec",
+			},
+			{
+				id = "force_shield_recharge_broken_sec_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_force_shield_recharge_broken_sec_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "force_shield_recharge_broken_sec",
+				type = "track",
+				val = 2,
+				min = 1,
+				max = 30,
+				step = 1,
+				def = defaults.force_shield_recharge_broken_sec,
+				hint = "ztc_faction_force_shield_recharge_broken_sec",
+			},
+			{
+				id = "force_shield_npc_enabled",
+				type = "check",
+				val = 1,
+				def = defaults.force_shield_npc_enabled,
+				hint = "ztc_faction_force_shield_npc_enabled",
+			},
+			{
+				id = "force_shield_npc_enabled_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_force_shield_npc_enabled_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "force_shield_npc_bullet_reduction",
+				type = "track",
+				val = 2,
+				min = 10,
+				max = 80,
+				step = 5,
+				def = defaults.force_shield_npc_bullet_reduction,
+				hint = "ztc_faction_force_shield_npc_bullet_reduction",
+			},
+			{
+				id = "force_shield_debug_log",
+				type = "check",
+				val = 1,
+				def = defaults.force_shield_debug_log,
+				hint = "ztc_faction_force_shield_debug_log",
+			},
+		},
+	}
+end
+
+function mcm.build_faction_tweaks_menu()
+	return {
+		id = "faction_tweaks",
+		gr = {
+			build_faction_settings_menu(),
+			build_monolith_menu(),
+			build_sin_menu(),
+		},
+	}
+end

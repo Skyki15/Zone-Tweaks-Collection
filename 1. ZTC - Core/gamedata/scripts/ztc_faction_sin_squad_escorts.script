@@ -1,0 +1,696 @@
+-- Sin combat squad blind-dog escorts (parallel registry to player taming).
+local FOLLOW_CHECK_MS = 1500
+local TELEPORT_DIST = 30.0
+local FOLLOW_DIST = 6.0
+local FOLLOW_REST_DIST = 4.0
+local FOLLOW_RUN_DIST = 10.0
+local FOLLOW_OFFSET = -2.0
+local FOLLOW_BACK_STEP = 1.2
+local FOLLOW_SIDE_STEP = 1.0
+local SQUAD_WIPE_DELAY_MS = 60000
+local WIPE_CHECK_MS = 5000
+local SAVE_KEY = "ztc_faction_sin_escort_roster"
+local SAVE_KEY_ATTEMPTED = "ztc_faction_sin_escort_attempted"
+
+local ELIGIBLE_SQUAD_SECTIONS = {
+	greh_sim_squad_novice = true,
+	greh_sim_squad_advanced = true,
+	greh_sim_squad_veteran = true,
+	greh_sim_squad_alpha = true,
+}
+
+local escort_registry = {}
+local escort_roster = {}
+local spawn_attempted = {}
+local next_follow_tick = {}
+local squad_wipe_pending = {}
+local next_wipe_check_ts = 0
+
+local function is_alive_obj(obj)
+	return obj and obj.alive and obj:alive()
+end
+
+local function ztc_faction_escort_get_config(key, fallback)
+	if ztc_faction_mcm and ztc_faction_mcm.get_config then
+		local val = ztc_faction_mcm.get_config(key)
+		if val ~= nil then
+			return val
+		end
+	end
+	return fallback
+end
+
+local function ztc_faction_escort_enabled()
+	if ztc_faction_utils and ztc_faction_utils.is_mod_enabled and not ztc_faction_utils.is_mod_enabled() then
+		return false
+	end
+	return ztc_faction_escort_get_config("sin_squad_escorts_enabled", false) == true
+end
+
+local function ztc_faction_escort_is_eligible_squad_section(section)
+	return section and ELIGIBLE_SQUAD_SECTIONS[section] == true
+end
+
+local function ztc_faction_escort_pick_dog_section(squad_section)
+	if squad_section == "greh_sim_squad_novice" then
+		return "dog_weak"
+	end
+	if squad_section == "greh_sim_squad_advanced" then
+		return "dog_normal"
+	end
+	return "dog_strong"
+end
+
+local function ztc_faction_escort_count_active()
+	local count = 0
+	for _ in pairs(escort_registry) do
+		count = count + 1
+	end
+	return count
+end
+
+local function ztc_faction_escort_rebuild_registry()
+	escort_registry = {}
+	for squad_id, roster in pairs(escort_roster) do
+		if type(roster) == "table" and type(roster.escorts) == "table" then
+			for mutant_id, section in pairs(roster.escorts) do
+				escort_registry[mutant_id] = {
+					squad_id = squad_id,
+					section = section,
+					commander_id = roster.commander_id,
+				}
+			end
+		end
+	end
+end
+
+local function ztc_faction_escort_register(mutant_id, squad_id, section, commander_id)
+	if not mutant_id then
+		return
+	end
+
+	escort_registry[mutant_id] = {
+		squad_id = squad_id,
+		section = section,
+		commander_id = commander_id,
+	}
+
+	if not escort_roster[squad_id] then
+		escort_roster[squad_id] = {
+			commander_id = commander_id,
+			escorts = {},
+		}
+	end
+
+	escort_roster[squad_id].commander_id = commander_id
+	escort_roster[squad_id].escorts[mutant_id] = section
+	spawn_attempted[squad_id] = true
+	next_follow_tick[mutant_id] = 0
+end
+
+local function ztc_faction_escort_unregister(mutant_id)
+	local entry = escort_registry[mutant_id]
+	if not entry then
+		next_follow_tick[mutant_id] = nil
+		return
+	end
+
+	escort_registry[mutant_id] = nil
+	next_follow_tick[mutant_id] = nil
+
+	local roster = escort_roster[entry.squad_id]
+	if roster and roster.escorts then
+		roster.escorts[mutant_id] = nil
+		if not next(roster.escorts) then
+			escort_roster[entry.squad_id] = nil
+			spawn_attempted[entry.squad_id] = nil
+			squad_wipe_pending[entry.squad_id] = nil
+		end
+	end
+end
+
+function ztc_faction_escort_is_sin_escort(obj)
+	if not obj then
+		return false
+	end
+
+	local id = obj:id()
+	local entry = escort_registry[id]
+	if not entry then
+		return false
+	end
+
+	if entry.section and obj:section() ~= entry.section then
+		ztc_faction_escort_unregister(id)
+		return false
+	end
+
+	return true
+end
+
+local function ztc_faction_escort_set_peaceful(flags)
+	flags.override = true
+	flags.result = false
+end
+
+local function ztc_faction_escort_is_hostile_wild_mutant(obj)
+	if not obj or not IsMonster(obj) then
+		return false
+	end
+	if ztc_faction_sin_alliance and ztc_faction_sin_alliance.is_hostile_mutant then
+		return ztc_faction_sin_alliance.is_hostile_mutant(obj, time_global()) == true
+	end
+	return false
+end
+
+local function ztc_faction_escort_enemy_get(obj)
+	if not obj or not obj.get_enemy then
+		return false
+	end
+
+	local enemy = obj:get_enemy()
+	if not enemy then
+		return false
+	end
+
+	if ztc_faction_escort_is_sin_escort(enemy) then
+		return false
+	end
+
+	if ztc_faction_taming and ztc_faction_taming.is_tamed and ztc_faction_taming.is_tamed(enemy) then
+		return false
+	end
+
+	return true
+end
+
+local function ztc_faction_escort_rest(obj)
+	if not obj then
+		return
+	end
+
+	if obj.action and obj:action() then
+		obj:reset_action_queue()
+	end
+
+	if obj.get_script and obj:get_script() then
+		obj:script(false, obj:get_script_name())
+	end
+end
+
+local function ztc_faction_escort_safe_set_npc_position(obj, pos)
+	if not obj or not pos then
+		return false
+	end
+
+	local ok = pcall(function()
+		obj:set_npc_position(pos)
+	end)
+	if ok then
+		return true
+	end
+
+	local alt_ok = pcall(function()
+		obj:set_npc_position(vector():set(pos.x + 0.8, pos.y, pos.z))
+	end)
+	if alt_ok then return true end
+
+	alt_ok = pcall(function()
+		obj:set_npc_position(vector():set(pos.x - 0.8, pos.y, pos.z))
+	end)
+	if alt_ok then return true end
+
+	alt_ok = pcall(function()
+		obj:set_npc_position(vector():set(pos.x, pos.y, pos.z + 0.8))
+	end)
+	if alt_ok then return true end
+
+	alt_ok = pcall(function()
+		obj:set_npc_position(vector():set(pos.x, pos.y, pos.z - 0.8))
+	end)
+	if alt_ok then return true end
+
+	return false
+end
+
+local function ztc_faction_escort_run_to(obj, pos)
+	if not obj or not pos then
+		return
+	end
+
+	if not (obj.get_script and obj.script and obj.action and action and move and cond) then
+		ztc_faction_escort_safe_set_npc_position(obj, pos)
+		return
+	end
+
+	if not obj:get_script() then
+		obj:script(true, "run_to_e")
+	end
+
+	local dist_to_target = obj:position():distance_to(pos)
+	local move_type = dist_to_target > FOLLOW_RUN_DIST and move.run_fwd or move.walk_fwd
+
+	action(obj, move(move_type, pos, 1, move.default), cond(cond.time_end, 100))
+
+	local pause_until = time_global() + 500
+	obj:set_fastcall(function(monster)
+		if pause_until < time_global() then
+			ztc_faction_escort_rest(monster)
+			return true
+		end
+		return false
+	end, obj)
+end
+
+local function ztc_faction_escort_build_follow_position(anchor, escort_id)
+	local lane = escort_id % 3
+	local lane_shift = lane - 1
+	local back_shift = FOLLOW_OFFSET - (lane * FOLLOW_BACK_STEP)
+
+	local dest = anchor:position():add(anchor:direction():mul(back_shift))
+	if anchor.right then
+		local right = anchor:right()
+		if right and lane_shift ~= 0 then
+			dest = dest:add(right:mul(lane_shift * FOLLOW_SIDE_STEP))
+		end
+	elseif lane_shift ~= 0 then
+		dest.x = dest.x + (lane_shift * FOLLOW_SIDE_STEP)
+	end
+
+	return dest
+end
+
+local function ztc_faction_escort_commander_near_actor(commander_id)
+	if not ztc_faction_utils.actor_is_valid() then
+		return false
+	end
+
+	local actor = db.actor
+	local commander = get_object_by_id(commander_id)
+	if commander then
+		local sim = alife()
+		if sim then
+			return commander:position():distance_to_sqr(actor:position()) <= sim:switch_distance()^2
+		end
+	end
+
+	local se_cmd = alife_object(commander_id)
+	local se_actor = alife() and alife():actor()
+	if se_cmd and se_actor then
+		if simulation_objects and not simulation_objects.is_on_the_same_level(se_cmd, se_actor) then
+			return false
+		end
+		return se_cmd.position:distance_to_sqr(se_actor.position) <= alife():switch_distance()^2
+	end
+
+	return false
+end
+
+local function ztc_faction_escort_maintain_position(monster, commander_id)
+	local commander = get_object_by_id(commander_id)
+	if not is_alive_obj(commander) then
+		return
+	end
+
+	if not ztc_faction_escort_commander_near_actor(commander_id) then
+		return
+	end
+
+	local dist = monster:position():distance_to(commander:position())
+	if dist <= FOLLOW_REST_DIST then
+		if monster.get_script and monster:get_script() and not ztc_faction_escort_enemy_get(monster) then
+			ztc_faction_escort_rest(monster)
+		end
+		return
+	end
+
+	if dist <= FOLLOW_DIST then
+		return
+	end
+
+	local dest = ztc_faction_escort_build_follow_position(commander, monster:id())
+	if dist > TELEPORT_DIST then
+		if ztc_faction_escort_enemy_get(monster) then
+			return
+		end
+		ztc_faction_escort_safe_set_npc_position(monster, dest)
+		return
+	end
+
+	if not ztc_faction_escort_enemy_get(monster) then
+		ztc_faction_escort_run_to(monster, dest)
+	end
+end
+
+local function ztc_faction_escort_count_squad_escorts(squad_id)
+	local roster = escort_roster[squad_id]
+	if not roster or not roster.escorts then
+		return 0
+	end
+
+	local count = 0
+	for _ in pairs(roster.escorts) do
+		count = count + 1
+	end
+	return count
+end
+
+local function ztc_faction_escort_spawn_near_commander(squad, squad_section, commander_id)
+	local commander_se = alife_object(commander_id)
+	if not commander_se then
+		return
+	end
+
+	local dog_section = ztc_faction_escort_pick_dog_section(squad_section)
+	if not ini_sys or not ini_sys:section_exist(dog_section) then
+		return
+	end
+
+	local pos = commander_se.position
+	local lvid = commander_se.m_level_vertex_id
+	local gvid = commander_se.m_game_vertex_id
+	local offset_pos = vector():set(pos.x + 1.2, pos.y, pos.z + 0.8)
+
+	local sobj = alife():create(dog_section, offset_pos, lvid, gvid)
+	if not sobj then
+		return
+	end
+
+	ztc_faction_escort_register(sobj.id, squad.id, dog_section, commander_id)
+end
+
+function ztc_faction_escort_try_spawn_for_squad(squad)
+	if not ztc_faction_escort_enabled() or not squad then
+		return
+	end
+
+	local squad_id = squad.id
+	if spawn_attempted[squad_id] then
+		return
+	end
+
+	local squad_section = squad:section_name()
+	if not ztc_faction_escort_is_eligible_squad_section(squad_section) then
+		return
+	end
+
+	spawn_attempted[squad_id] = true
+
+	local chance = ztc_faction_escort_get_config("sin_squad_escort_chance", 40)
+	if math.random(1, 100) > chance then
+		return
+	end
+
+	local max_per_squad = ztc_faction_escort_get_config("sin_squad_escorts_max_per_squad", 1)
+	if ztc_faction_escort_count_squad_escorts(squad_id) >= max_per_squad then
+		return
+	end
+
+	local max_active = ztc_faction_escort_get_config("sin_squad_escorts_max_active", 6)
+	if ztc_faction_escort_count_active() >= max_active then
+		return
+	end
+
+	local commander_id = squad:commander_id()
+	if not commander_id then
+		return
+	end
+
+	ztc_faction_escort_spawn_near_commander(squad, squad_section, commander_id)
+end
+
+local function ztc_faction_escort_squad_any_member_alive(squad)
+	if not squad then
+		return false
+	end
+
+	for member in squad:squad_members() do
+		local se_member = member.object or (member.id and alife_object(member.id))
+		if se_member then
+			local ok, alive = pcall(function()
+				return se_member:alive()
+			end)
+			if ok and alive then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+local function ztc_faction_escort_release_squad_escorts(squad_id)
+	local roster = escort_roster[squad_id]
+	if not roster or not roster.escorts then
+		escort_roster[squad_id] = nil
+		spawn_attempted[squad_id] = nil
+		squad_wipe_pending[squad_id] = nil
+		return
+	end
+
+	for mutant_id in pairs(roster.escorts) do
+		escort_registry[mutant_id] = nil
+		next_follow_tick[mutant_id] = nil
+	end
+
+	escort_roster[squad_id] = nil
+	spawn_attempted[squad_id] = nil
+	squad_wipe_pending[squad_id] = nil
+end
+
+local function ztc_faction_escort_check_squad_wipes(now)
+	if now < next_wipe_check_ts then
+		return
+	end
+	next_wipe_check_ts = now + WIPE_CHECK_MS
+
+	for squad_id in pairs(escort_roster) do
+		local squad = alife_object(squad_id)
+		if not squad then
+			ztc_faction_escort_release_squad_escorts(squad_id)
+		elseif ztc_faction_escort_squad_any_member_alive(squad) then
+			squad_wipe_pending[squad_id] = nil
+		else
+			if not squad_wipe_pending[squad_id] then
+				squad_wipe_pending[squad_id] = now + SQUAD_WIPE_DELAY_MS
+			elseif now >= squad_wipe_pending[squad_id] then
+				ztc_faction_escort_release_squad_escorts(squad_id)
+			end
+		end
+	end
+end
+
+function ztc_faction_escort_squad_on_npc_creation(squad, se_obj, spawn_smart)
+	if not ztc_faction_escort_enabled() or not squad then
+		return
+	end
+
+	ztc_faction_escort_try_spawn_for_squad(squad)
+end
+
+function ztc_faction_escort_npc_on_net_spawn(npc, se_obj)
+	if not ztc_faction_escort_enabled() or not is_alive_obj(npc) or IsMonster(npc) then
+		return
+	end
+
+	if not ztc_faction_utils.obj_is_sin(npc) then
+		return
+	end
+
+	local squad = get_object_squad(npc)
+	if not squad then
+		return
+	end
+
+	ztc_faction_escort_try_spawn_for_squad(squad)
+end
+
+function ztc_faction_escort_monster_on_net_spawn(obj)
+	if not is_alive_obj(obj) then
+		return
+	end
+
+	local id = obj:id()
+	if escort_registry[id] then
+		next_follow_tick[id] = 0
+	end
+end
+
+function ztc_faction_escort_monster_on_net_destroy(obj)
+	if not obj then
+		return
+	end
+	next_follow_tick[obj:id()] = nil
+end
+
+function ztc_faction_escort_monster_on_update(obj)
+	if not is_alive_obj(obj) then
+		return
+	end
+
+	local id = obj:id()
+	local entry = escort_registry[id]
+	if not entry then
+		return
+	end
+
+	local current_enemy = obj:get_enemy()
+	if current_enemy and ztc_faction_escort_is_sin_escort(current_enemy) then
+		ztc_faction_escort_rest(obj)
+		return
+	end
+
+	if current_enemy and ztc_faction_taming and ztc_faction_taming.is_tamed and ztc_faction_taming.is_tamed(current_enemy) then
+		ztc_faction_escort_rest(obj)
+		return
+	end
+
+	local commander_id = entry.commander_id
+	if not commander_id then
+		return
+	end
+
+	local now = time_global()
+	local next_tick = next_follow_tick[id] or 0
+	if now < next_tick then
+		return
+	end
+
+	next_follow_tick[id] = now + FOLLOW_CHECK_MS
+	ztc_faction_escort_maintain_position(obj, commander_id)
+end
+
+function ztc_faction_escort_on_enemy_eval(npc, enemy, flags)
+	if not npc or not enemy or not flags then
+		return
+	end
+
+	local npc_escort = ztc_faction_escort_is_sin_escort(npc)
+	local enemy_escort = ztc_faction_escort_is_sin_escort(enemy)
+	if not npc_escort and not enemy_escort then
+		return
+	end
+
+	if ztc_faction_utils.actor_is_valid() then
+		local actor_id = db.actor:id()
+		if npc:id() == actor_id or enemy:id() == actor_id then
+			ztc_faction_escort_set_peaceful(flags)
+			return
+		end
+	end
+
+	if npc_escort and enemy_escort then
+		ztc_faction_escort_set_peaceful(flags)
+		return
+	end
+
+	if ztc_faction_taming and ztc_faction_taming.is_tamed then
+		if ztc_faction_taming.is_tamed(npc) or ztc_faction_taming.is_tamed(enemy) then
+			ztc_faction_escort_set_peaceful(flags)
+			return
+		end
+	end
+
+	if npc_escort and ztc_faction_utils.obj_is_monolith(enemy) then
+		ztc_faction_escort_set_peaceful(flags)
+		return
+	end
+
+	if enemy_escort and ztc_faction_utils.obj_is_monolith(npc) then
+		ztc_faction_escort_set_peaceful(flags)
+		return
+	end
+
+	if npc_escort and not IsMonster(enemy) and ztc_faction_utils.obj_is_sin(enemy) then
+		ztc_faction_escort_set_peaceful(flags)
+		return
+	end
+
+	if enemy_escort and not IsMonster(npc) and ztc_faction_utils.obj_is_sin(npc) then
+		ztc_faction_escort_set_peaceful(flags)
+		return
+	end
+
+	if npc_escort and IsMonster(enemy) then
+		if ztc_faction_escort_is_hostile_wild_mutant(enemy) then
+			return
+		end
+		ztc_faction_escort_set_peaceful(flags)
+		return
+	end
+
+	if enemy_escort and IsMonster(npc) then
+		if ztc_faction_escort_is_hostile_wild_mutant(npc) then
+			return
+		end
+		ztc_faction_escort_set_peaceful(flags)
+		return
+	end
+end
+
+function ztc_faction_escort_monster_on_death_callback(victim, who)
+	if not victim then
+		return
+	end
+
+	if ztc_faction_escort_is_sin_escort(victim) then
+		ztc_faction_escort_unregister(victim:id())
+	end
+end
+
+function ztc_faction_escort_actor_on_update()
+	if not ztc_faction_escort_enabled() then
+		return
+	end
+
+	ztc_faction_escort_check_squad_wipes(time_global())
+end
+
+function ztc_faction_escort_save_state(mdata)
+	mdata[SAVE_KEY] = escort_roster
+	mdata[SAVE_KEY_ATTEMPTED] = spawn_attempted
+end
+
+function ztc_faction_escort_load_state(mdata)
+	if mdata and mdata[SAVE_KEY] then
+		escort_roster = mdata[SAVE_KEY]
+	else
+		escort_roster = {}
+	end
+
+	if mdata and mdata[SAVE_KEY_ATTEMPTED] then
+		spawn_attempted = mdata[SAVE_KEY_ATTEMPTED]
+	else
+		spawn_attempted = {}
+	end
+
+	squad_wipe_pending = {}
+	next_follow_tick = {}
+	next_wipe_check_ts = 0
+
+	for squad_id, roster in pairs(escort_roster) do
+		if type(roster) ~= "table" or type(roster.escorts) ~= "table" then
+			escort_roster[squad_id] = nil
+		else
+			spawn_attempted[squad_id] = true
+		end
+	end
+
+	ztc_faction_escort_rebuild_registry()
+end
+
+function on_game_start()
+	_G.ztc_faction_escorts = _G.ztc_faction_escorts or {}
+	_G.ztc_faction_escorts.is_sin_escort = ztc_faction_escort_is_sin_escort
+
+	RegisterScriptCallback("squad_on_npc_creation", ztc_faction_escort_squad_on_npc_creation)
+	RegisterScriptCallback("npc_on_net_spawn", ztc_faction_escort_npc_on_net_spawn)
+	RegisterScriptCallback("monster_on_net_spawn", ztc_faction_escort_monster_on_net_spawn)
+	RegisterScriptCallback("monster_on_net_destroy", ztc_faction_escort_monster_on_net_destroy)
+	RegisterScriptCallback("monster_on_update", ztc_faction_escort_monster_on_update)
+	RegisterScriptCallback("monster_on_death_callback", ztc_faction_escort_monster_on_death_callback)
+	RegisterScriptCallback("on_enemy_eval", ztc_faction_escort_on_enemy_eval)
+	RegisterScriptCallback("actor_on_update", ztc_faction_escort_actor_on_update)
+	RegisterScriptCallback("save_state", ztc_faction_escort_save_state)
+	RegisterScriptCallback("load_state", ztc_faction_escort_load_state)
+end
