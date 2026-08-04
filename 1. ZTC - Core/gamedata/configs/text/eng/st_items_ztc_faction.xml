@@ -5,7 +5,7 @@
 	</string>
 
 	<string id="st_af_ztc_faction_force_shield_descr">
-		<text>A gravitational artifact bonded to every Sin cell fighter at initiation. Worn on the artifact belt, it drags on incoming rounds and bleeds off their velocity before they reach flesh, the stronger the field charge, the more it slows them. Sustained fire frays the pull and drains its charge; when the field collapses, protection fails until the cicatrix knits fully closed again. It recharges slowly while whole, faster while broken. Carrying it in your pack still feeds the field, but only the belt deploys it. Fused to the bearer, cannot be sold, dropped, or stashed.</text>
+		<text>A gravitational artifact bonded to every Sin cell fighter at initiation. Worn on the artifact belt, it drags on incoming rounds and bleeds off their velocity before they reach flesh while the field holds charge. Sustained fire frays the pull and drains its charge; when the field collapses, protection fails until the cicatrix knits fully closed again. It recharges slowly while whole, faster while broken. Carrying it in your pack still feeds the field, but only the belt deploys it. Fused to the bearer, cannot be sold, dropped, or stashed.</text>
 	</string>
 
 	<string id="st_af_ztc_faction_force_shield_charge">

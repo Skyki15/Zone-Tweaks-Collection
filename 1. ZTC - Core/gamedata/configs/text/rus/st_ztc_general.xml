@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="windows-1251" standalone="yes" ?>
+<string_table>
+	<string id="ui_mcm_menu_general">
+		<text>Общее</text>
+	</string>
+
+	<string id="ui_mcm_ztc_general_title">
+		<text>Общее</text>
+	</string>
+
+	<string id="ui_mcm_ztc_general_disable_wounded_state">
+		<text>Отключить раненое состояние</text>
+	</string>
+
+	<string id="ui_mcm_ztc_general_disable_wounded_state_desc">
+		<text>Сталкеры при низком здоровье остаются на ногах, вместо того чтобы лежать в раненом состоянии.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_general_exclude_story_npcs">
+		<text>Исключить сюжетных NPC (оставить раненое состояние)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_general_exclude_monolith">
+		<text>Исключить Монолит (оставить раненое состояние)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_general_exclude_companions">
+		<text>Исключить напарников (оставить раненое состояние)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_general_wounded_compat_desc">
+		<text>Отключение исключения для сюжетных NPC может конфликтовать с квестовыми скриптами, зависящими от раненого состояния. Исключение Монолита сохраняет их поведение с гранатой в раненом состоянии. Исключение напарников сохраняет механики возрождения отряда и раненых напарников. Исключённые сюжетные NPC и напарники не считаются врагами в раненом состоянии.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_general_disable_weapon_warnings">
+		<text>Отключить предупреждения об оружии</text>
+	</string>
+
+	<string id="ui_mcm_ztc_general_disable_weapon_warnings_desc">
+		<text>Сталкеры считают вас безоружным при проверках при встрече и предупреждениях, пока оружие в руках. Переключается мгновенно через MCM.</text>
+	</string>
+</string_table>

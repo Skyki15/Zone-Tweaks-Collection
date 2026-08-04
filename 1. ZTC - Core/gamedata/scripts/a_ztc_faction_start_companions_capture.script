@@ -1,0 +1,37 @@
+-- ZTC Start Companions — early on_game_load capture (before ui_mm_faction_select clears new_game_faction).
+-- Loaded early via a_ prefix so RegisterScriptCallback runs before ui_mm_faction_select.
+
+_G.ztc_start_companions_capture = _G.ztc_start_companions_capture or {}
+
+local capture = _G.ztc_start_companions_capture
+local STORAGE_FRESH_FACTION = "ztc_fresh_start_faction"
+local CONFIG_FRESH_FACTION = "ztc_fresh_start_faction"
+
+function capture.capture_fresh_start()
+	local state = alife_storage_manager and alife_storage_manager.get_state and alife_storage_manager.get_state()
+	if not state or state[STORAGE_FRESH_FACTION] then
+		return
+	end
+
+	local config = axr_main and axr_main.config
+	if not config then
+		return
+	end
+
+	local faction = config:r_value("character_creation", CONFIG_FRESH_FACTION, 3)
+	if not faction or faction == "" then
+		faction = config:r_value("character_creation", "new_game_faction", 3)
+	end
+
+	if faction == "bandit" or faction == "renegade" or faction == "freedom" or faction == "dolg" or faction == "army" or faction == "isg" then
+		state[STORAGE_FRESH_FACTION] = faction
+	end
+end
+
+function capture.on_game_load()
+	pcall(capture.capture_fresh_start)
+end
+
+function on_game_start()
+	RegisterScriptCallback("on_game_load", capture.on_game_load)
+end

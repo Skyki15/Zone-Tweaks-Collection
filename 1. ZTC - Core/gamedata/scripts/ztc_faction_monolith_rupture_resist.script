@@ -1,7 +1,29 @@
 -- Monolith passive rupture resistance (melee, cuts, explosions).
 
-local function ztc_faction_get_rupture_reduction_percent(config_key)
+local RUPTURE_ENABLED_KEYS = {
+	monolith_rupture_resistance_actor = "monolith_rupture_resistance_actor_enabled",
+	monolith_rupture_resistance_npc = "monolith_rupture_resistance_npc_enabled",
+}
+
+local function ztc_faction_is_rupture_resistance_enabled(config_key)
+	local enabled_key = RUPTURE_ENABLED_KEYS[config_key]
+	if not enabled_key then
+		return false
+	end
+
 	if ztc_faction_utils and ztc_faction_utils.is_mod_enabled and not ztc_faction_utils.is_mod_enabled() then
+		return false
+	end
+
+	if not ztc_faction_mcm or not ztc_faction_mcm.get_config then
+		return false
+	end
+
+	return ztc_faction_mcm.get_config(enabled_key) == true
+end
+
+local function ztc_faction_get_rupture_reduction_percent(config_key)
+	if not ztc_faction_is_rupture_resistance_enabled(config_key) then
 		return 0
 	end
 

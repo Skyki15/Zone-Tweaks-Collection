@@ -10,6 +10,8 @@ data.DEFAULT_MULT = 1.0
 -- Personal reset baselines for MCM sliders (omit entries to fall back to DEFAULT_MULT).
 data.RANK_DEFAULTS = {}
 
+data.FACTION_DEFAULTS = {}
+
 data.SPECIES_DEFAULTS = {}
 
 data.STALKER_RANKS = {
@@ -21,6 +23,22 @@ data.STALKER_RANKS = {
 	"expert",
 	"master",
 	"legend",
+}
+
+data.STALKER_FACTIONS = {
+	"stalker",
+	"bandit",
+	"csky",
+	"dolg",
+	"freedom",
+	"killer",
+	"army",
+	"ecolog",
+	"monolith",
+	"renegade",
+	"greh",
+	"isg",
+	"zombied",
 }
 
 data.MUTANT_SPECIES = {
@@ -92,6 +110,24 @@ function data.get_rank_default(rank)
 	return data.DEFAULT_MULT
 end
 
+function data.get_faction_default(faction)
+	if faction and data.FACTION_DEFAULTS[faction] ~= nil then
+		return data.clamp_multiplier(data.FACTION_DEFAULTS[faction])
+	end
+	return data.DEFAULT_MULT
+end
+
+function data.combine_multipliers(...)
+	local combined = data.DEFAULT_MULT
+	for i = 1, select("#", ...) do
+		local mult = select(i, ...)
+		if mult then
+			combined = combined * mult
+		end
+	end
+	return data.clamp_multiplier(combined)
+end
+
 function data.get_species_default(species)
 	if species and data.SPECIES_DEFAULTS[species] ~= nil then
 		return data.clamp_multiplier(data.SPECIES_DEFAULTS[species])
@@ -104,6 +140,40 @@ function data.get_stalker_rank(obj)
 		return nil
 	end
 	return ranks.get_obj_rank_name(obj)
+end
+
+function data.normalize_stalker_faction(comm)
+	if not comm or comm == "" then
+		return nil
+	end
+
+	if comm:match("^actor_") then
+		comm = comm:sub(7)
+	end
+
+	for i = 1, #data.STALKER_FACTIONS do
+		if data.STALKER_FACTIONS[i] == comm then
+			return comm
+		end
+	end
+
+	return nil
+end
+
+function data.get_stalker_faction(obj)
+	if not obj then
+		return nil
+	end
+
+	if character_community then
+		return data.normalize_stalker_faction(character_community(obj))
+	end
+
+	if obj.character_community then
+		return data.normalize_stalker_faction(obj:character_community())
+	end
+
+	return nil
 end
 
 local function valid_community(comm)

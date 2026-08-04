@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="windows-1251" standalone="yes" ?>
+<string_table>
+	<string id="ui_mcm_menu_player_tweaks">
+		<text>Настройки игрока</text>
+	</string>
+
+	<string id="ui_mcm_menu_stamina">
+		<text>Выносливость</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_stamina_title">
+		<text>Выносливость</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_stamina_thirst_desc">
+		<text>Необязательные связи между использованием выносливости и потребностями выживания. Все опции здесь по умолчанию выключены.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_stamina_thirst_multiplier">
+		<text>Связь выносливости и жажды</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_stamina_thirst_multiplier_desc">
+		<text>Насколько потеря выносливости увеличивает обезвоживание. 0 = выкл. (только ванильная жажда). Требует включённой жажды в настройках сложности. Большие значения ускоряют обезвоживание при спринте и тяжёлой ноше.</text>
+	</string>
+
+</string_table>

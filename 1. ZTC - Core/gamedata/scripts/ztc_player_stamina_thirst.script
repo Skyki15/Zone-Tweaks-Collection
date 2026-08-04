@@ -1,0 +1,118 @@
+-- Zone Tweaks Collection — Stamina loss increases thirst (optional)
+
+_G.ztc_player_stamina_thirst = _G.ztc_player_stamina_thirst or {}
+local mod = _G.ztc_player_stamina_thirst
+
+-- At multiplier 1.0, losing 1.0 stamina adds 100 to last_drink (~3 vanilla thirst ticks).
+local STAMINA_THIRST_SCALE = 100
+
+local cached_multiplier = 0
+local last_power = nil
+
+function mod.load_settings()
+	local val = ztc_player_mcm.get_config("stamina_thirst_multiplier")
+	cached_multiplier = tonumber(val) or 0
+end
+
+function mod.is_active()
+	return cached_multiplier > 0
+end
+
+function mod.thirst_module_active()
+	if not actor_status_thirst then
+		return false
+	end
+
+	if actor_status_thirst.feature_state ~= nil then
+		return actor_status_thirst.feature_state == true
+	end
+
+	return actor_status_thirst.get_water_deprivation ~= nil
+		and game_difficulties.get_game_factor("thirst") == true
+end
+
+function mod.get_blur_threshold()
+	if actor_status_thirst and actor_status_thirst.start_blur_2 then
+		return actor_status_thirst.start_blur_2
+	end
+	return 2880
+end
+
+function mod.clamp_last_drink(value)
+	if value < 0 then
+		return 0
+	elseif value > 10000 then
+		return 10000
+	end
+	return value
+end
+
+function ztc_player_stamina_thirst_on_update()
+	if cached_multiplier <= 0 then
+		return
+	end
+
+	local actor = db.actor
+	if not (actor and actor.alive and actor:alive()) then
+		return
+	end
+
+	if get_console_cmd(1, "g_god") then
+		return
+	end
+
+	if not game_difficulties.get_game_factor("thirst") then
+		return
+	end
+
+	if not mod.thirst_module_active() then
+		return
+	end
+
+	local last_drink = actor_status_thirst.last_drink
+	if last_drink == nil then
+		return
+	end
+
+	local current_power = actor.power
+	if last_power == nil then
+		last_power = current_power
+		return
+	end
+
+	if last_drink > mod.get_blur_threshold() then
+		last_power = current_power
+		return
+	end
+
+	local consumed = last_power - current_power
+	last_power = current_power
+
+	if consumed <= 0 then
+		return
+	end
+
+	local delta = consumed * cached_multiplier * STAMINA_THIRST_SCALE
+	actor_status_thirst.last_drink = mod.clamp_last_drink(last_drink + delta)
+end
+
+function ztc_player_stamina_thirst_on_sleep(hours)
+	local actor = db.actor
+	if actor then
+		last_power = actor.power
+	else
+		last_power = nil
+	end
+end
+
+function ztc_player_stamina_thirst_on_option_change()
+	mod.load_settings()
+end
+
+function on_game_start()
+	mod.load_settings()
+
+	RegisterScriptCallback("actor_on_update", ztc_player_stamina_thirst_on_update)
+	RegisterScriptCallback("actor_on_sleep", ztc_player_stamina_thirst_on_sleep)
+	RegisterScriptCallback("on_option_change", ztc_player_stamina_thirst_on_option_change)
+end

@@ -1,0 +1,355 @@
+-- ==============================================================================
+-- Zone Tweaks Collection — Ballistics V2.0
+-- Symmetrical physics-based ballistics: AP vs BR and range drag.
+--
+-- Armor penetration: effective k_ap is derived from weapon class (LTX `kind`)
+-- and ammo tier (`ztc_ammo_tier` in DLTX, or inferred from section name).
+-- Raw ammo k_ap is not used for penetration; k_air_resistance still drives drag.
+-- ==============================================================================
+
+local CONFIG = {
+    state_a_dmg_mult     = 0.38,
+    state_b_dmg_mult     = 0.55,
+    state_c_dmg_mult     = 1.0,
+    global_damage_mult   = 0.80,
+    br_normalization     = 0.06,
+    npc_default_br_class = 2,
+    npc_ap_rank_threshold = 11999, -- vanilla Veteran minimum (trainee tops out at 6498)
+}
+
+local PEN = {
+    w_pistol = { soft=0.05, ball=0.10, enhanced=0.15, ap=0.22, ap_amr=0.22, buckshot=0.03 },
+    w_smg    = { soft=0.05, ball=0.12, enhanced=0.22, ap=0.32, ap_amr=0.32, buckshot=0.03 },
+    w_rifle  = { soft=0.05, ball=0.18, enhanced=0.32, ap=0.50, ap_amr=0.55, buckshot=0.03 },
+    w_sniper = { soft=0.05, ball=0.25, enhanced=0.40, ap=0.62, ap_amr=0.75, buckshot=0.03 },
+    w_shotgun= { soft=0.05, ball=0.15, enhanced=0.32, ap=0.45, ap_amr=0.45, buckshot=0.03 },
+}
+
+local MCM_BALLISTICS_ENABLED = "ztc/damage_tweaks/settings/ballistics_enabled"
+
+local enabled = true
+
+local function load_settings()
+    if ui_mcm then
+        local val = ui_mcm.get(MCM_BALLISTICS_ENABLED)
+        if val ~= nil then
+            enabled = val == true
+            return
+        end
+    end
+    enabled = true
+end
+
+local ammo_cache = {}
+local ammo_tier_cache = {}
+local armor_br_cache = {}
+local npc_visual_sec_cache = {}
+local wpn_ammo_cache = {}
+local wpn_kind_cache = {}
+local npc_ap_cache = {}
+local IsStalker = IsStalker
+local IsMonster = IsMonster
+
+local function safe_get_ammo_type(wpn)
+    return wpn:get_ammo_type()
+end
+
+local function get_weapon_ammo(wpn, shooter)
+    local sec = wpn:section()
+    if not wpn_ammo_cache[sec] then
+        local ammos = ini_sys:r_string_ex(sec, "ammo_class")
+        local ammo_list = {}
+        if ammos then
+            for s in string.gmatch(ammos, "([^,]+)") do
+                table.insert(ammo_list, (s:gsub("%s+", "")))
+            end
+        end
+        wpn_ammo_cache[sec] = ammo_list
+    end
+
+    local ammo_list = wpn_ammo_cache[sec]
+    local list_len = #ammo_list
+    if list_len == 0 then return nil end
+    if list_len == 1 then return ammo_list[1] end
+
+    if shooter and shooter:id() ~= AC_ID and IsStalker(shooter) then
+        local id = shooter:id()
+        if npc_ap_cache[id] == nil then
+            local rank = shooter:character_rank() or 0
+            npc_ap_cache[id] = (rank >= CONFIG.npc_ap_rank_threshold)
+        end
+        if npc_ap_cache[id] and list_len >= 2 then
+            return ammo_list[2]
+        end
+    end
+
+    local idx = 0
+    local success, res = pcall(safe_get_ammo_type, wpn)
+    if success and res then
+        idx = res
+    end
+
+    return ammo_list[idx + 1]
+end
+
+local function get_ammo_stats(sec)
+    if not sec then return 0.2, 0.5 end
+    if ammo_cache[sec] then return ammo_cache[sec].ap, ammo_cache[sec].air_res end
+    local ap = ini_sys:r_float_ex(sec, "k_ap") or 0.2
+    local air_res = ini_sys:r_float_ex(sec, "k_air_resistance") or 0.5
+    ammo_cache[sec] = {ap = ap, air_res = air_res}
+    return ap, air_res
+end
+
+local function infer_ammo_tier_from_name(sec)
+    local s = string.lower(sec)
+    if string.find(s, "50_bmg") then return "ap_amr" end
+    if string.find(s, "magnum_300") then return "enhanced" end
+    if string.find(s, "buck") or string.find(s, "shrapnel") then return "buckshot" end
+    if string.find(s, "_ap") then return "ap" end
+    if string.find(s, "_fmj") or string.find(s, "_pab9") or string.find(s, "7h1") then return "ball" end
+    if string.find(s, "_pbp") or string.find(s, "_hydro") or string.find(s, "_hp") or string.find(s, "_ss195") then return "soft" end
+    if string.find(s, "_pmm") or string.find(s, "_ps") or string.find(s, "_ep") or string.find(s, "_ss190")
+        or string.find(s, "_7h14") or string.find(s, "_zhekan") or string.find(s, "_barrikada") then return "enhanced" end
+    return "ball"
+end
+
+local function get_weapon_kind(wpn)
+    local sec = wpn:section()
+    if wpn_kind_cache[sec] then return wpn_kind_cache[sec] end
+    local kind = ini_sys:r_string_ex(sec, "kind") or "w_rifle"
+    if not PEN[kind] then kind = "w_rifle" end
+    wpn_kind_cache[sec] = kind
+    return kind
+end
+
+local function get_ammo_tier(ammo_sec)
+    if not ammo_sec then return "ball" end
+    if ammo_tier_cache[ammo_sec] then return ammo_tier_cache[ammo_sec] end
+    local tier = ini_sys:r_string_ex(ammo_sec, "ztc_ammo_tier")
+    if not tier or tier == "" then
+        tier = infer_ammo_tier_from_name(ammo_sec)
+    end
+    if not PEN.w_rifle[tier] then tier = "ball" end
+    ammo_tier_cache[ammo_sec] = tier
+    return tier
+end
+
+local function get_effective_k_ap(wpn, ammo_sec)
+    local kind = get_weapon_kind(wpn)
+    local tier = get_ammo_tier(ammo_sec)
+    local pen_table = PEN[kind] or PEN.w_rifle
+    return pen_table[tier] or pen_table.ball
+end
+
+local function get_br_from_section(sec)
+    if not sec then return CONFIG.npc_default_br_class * CONFIG.br_normalization end
+    if armor_br_cache[sec] then return armor_br_cache[sec] end
+
+    local br = ini_sys:r_float_ex(sec, "ztc_br_class") or CONFIG.npc_default_br_class
+    local final_br = br * CONFIG.br_normalization
+    armor_br_cache[sec] = final_br
+    return final_br
+end
+
+local function get_armor_br(armor)
+    if not armor then return 0 end
+    return get_br_from_section(armor:section())
+end
+
+local function get_npc_visual_gear_secs(vis)
+    if not vis then return nil end
+    if npc_visual_sec_cache[vis] ~= nil then
+        local secs = npc_visual_sec_cache[vis]
+        if secs == false then return nil end
+        return secs
+    end
+
+    local secs = nil
+    if death_manager then
+        secs = death_manager.get_outfit_by_npc_visual(vis)
+    end
+    npc_visual_sec_cache[vis] = secs or false
+    return secs
+end
+
+local function get_npc_br(npc, bone_id)
+    local is_head = bone_id and bone_id >= 14 and bone_id <= 19
+    local armor = npc:item_in_slot(is_head and 12 or 7)
+
+    if armor then
+        return get_armor_br(armor) * (armor:condition() or 1.0), armor
+    end
+
+    local gear_secs = get_npc_visual_gear_secs(npc:get_visual_name())
+    if gear_secs then
+        local sec = is_head and gear_secs[2] or gear_secs[1]
+        if sec then
+            return get_br_from_section(sec), nil
+        end
+    end
+
+    return CONFIG.npc_default_br_class * CONFIG.br_normalization, nil
+end
+
+local function process_hit(target, shit, bone_id)
+    if not target then return end
+
+    if not target:alive() then
+        if shit then shit.impulse = 0 end
+        return
+    end
+
+    if not (shit and shit.draftsman and shit.weapon_id) then return end
+    if shit.type ~= hit.fire_wound then return end
+
+    if target:id() == AC_ID and ztc_bleed_capture_actor_hit then
+        ztc_bleed_capture_actor_hit(shit, bone_id)
+    end
+
+    if not enabled then return end
+
+    local shooter = shit.draftsman
+    local wpn = level.object_by_id(shit.weapon_id)
+    if not (wpn and wpn:is_weapon()) then return end
+
+    if not shooter then return end
+    local shooter_pos = shooter:position()
+    local target_pos = target:position()
+    if not (shooter_pos and target_pos) then return end
+
+    local dist = shooter_pos:distance_to(target_pos)
+
+    local ammo_sec = get_weapon_ammo(wpn, shooter)
+    local _, k_air_res = get_ammo_stats(ammo_sec)
+    local k_ap = get_effective_k_ap(wpn, ammo_sec)
+
+    local drag_mult = 1 / (1 + (dist * k_air_res * 0.005))
+
+    local br = 0
+    local armor = nil
+
+    if target:id() == AC_ID then
+        if bone_id and bone_id >= 14 and bone_id <= 19 then
+            armor = target:item_in_slot(12)
+        else
+            armor = target:item_in_slot(7)
+        end
+
+        if armor then
+            br = get_armor_br(armor) * (armor:condition() or 1.0)
+        end
+    else
+        if IsMonster(target) then
+            br = 0
+        else
+            br, armor = get_npc_br(target, bone_id)
+        end
+    end
+
+    local penetration_mult = 1.0
+    if br > 0 then
+        if k_ap < br * 0.8 then
+            penetration_mult = CONFIG.state_a_dmg_mult
+
+            if armor then
+                local new_cond = (armor:condition() or 1.0) - (shit.power * 0.01)
+                if new_cond < 0 then new_cond = 0 end
+                armor:set_condition(new_cond)
+            end
+
+        elseif k_ap >= br * 0.8 and k_ap <= br * 1.2 then
+            penetration_mult = CONFIG.state_b_dmg_mult
+
+            if armor then
+                local new_cond = (armor:condition() or 1.0) - (shit.power * 0.05)
+                if new_cond < 0 then new_cond = 0 end
+                armor:set_condition(new_cond)
+            end
+
+        else
+            penetration_mult = CONFIG.state_c_dmg_mult
+        end
+    else
+        penetration_mult = CONFIG.state_c_dmg_mult
+    end
+
+    local final_mult = drag_mult * penetration_mult * CONFIG.global_damage_mult
+    shit.power = shit.power * final_mult
+
+    if target.health <= shit.power then
+        shit.impulse = 0
+    end
+end
+
+function actor_on_before_hit(s_hit, bone_id, flags)
+    process_hit(db.actor, s_hit, bone_id)
+end
+
+function npc_on_before_hit(npc, s_hit, bone_id, flags)
+    process_hit(npc, s_hit, bone_id)
+end
+
+function ztc_ballistics_on_net_destroy(npc)
+    if npc then
+        npc_ap_cache[npc:id()] = nil
+    end
+end
+
+local first_update_hit_pwr_done = false
+
+local function ztc_ballistics_ensure_hit_power_factor()
+    if not enabled then
+        return false
+    end
+
+    if not (game_difficulties and game_difficulties.get_game_factor and game_difficulties.set_game_factor) then
+        return false
+    end
+
+    local hit_power = tonumber(game_difficulties.get_game_factor("hit_power")) or 1
+    if hit_power == 1 then
+        return false
+    end
+
+    game_difficulties.set_game_factor("hit_power", 1)
+    printf("~[ztc_ballistics] Hit Power Factor was %.2f — reset to 1.0 (required for ballistics tuning)", hit_power)
+    return true
+end
+
+local function ztc_ballistics_schedule_hit_power_check(tag)
+    CreateTimeEvent("ztc_ballistics_hp_" .. tag, "go", 0.15, function()
+        load_settings()
+        ztc_ballistics_ensure_hit_power_factor()
+        return true
+    end)
+end
+
+function ztc_ballistics_on_option_change()
+    load_settings()
+    ztc_ballistics_ensure_hit_power_factor()
+end
+
+function ztc_ballistics_on_game_load()
+    first_update_hit_pwr_done = false
+    ztc_ballistics_schedule_hit_power_check("load")
+end
+
+function ztc_ballistics_actor_on_first_update()
+    if first_update_hit_pwr_done then
+        return
+    end
+    first_update_hit_pwr_done = true
+    ztc_ballistics_schedule_hit_power_check("first_update")
+end
+
+function on_game_start()
+    load_settings()
+
+    RegisterScriptCallback("actor_on_before_hit", actor_on_before_hit)
+    RegisterScriptCallback("npc_on_before_hit", npc_on_before_hit)
+    RegisterScriptCallback("npc_on_net_destroy", ztc_ballistics_on_net_destroy)
+    RegisterScriptCallback("on_option_change", ztc_ballistics_on_option_change)
+    RegisterScriptCallback("on_game_load", ztc_ballistics_on_game_load)
+    RegisterScriptCallback("actor_on_first_update", ztc_ballistics_actor_on_first_update)
+end

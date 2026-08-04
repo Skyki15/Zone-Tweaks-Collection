@@ -1,0 +1,586 @@
+; =============================================================================
+; ZTC Ballistics — outfit / helmet ballistic rating (ztc_br_class)
+; =============================================================================
+; Ballistics script reads ztc_br_class (integer 0-6) on outfit and helmet
+; item sections. Vanilla armor_class on bone protection sections does NOT exist.
+;
+; effective_br = ztc_br_class x 0.06 x item:condition()
+;
+; Scale:
+;   0 = no ballistic rating (bandana, bare head)
+;   1 = rags / trenchcoat / novice
+;   2 = light stalker / bandit jacket
+;   3 = medium / PS5 / sunrise / SEVA
+;   4 = military / specops / bulat / berill
+;   5 = Skat / SSP / scientific heavy / proto-exo
+;   6 = Nosorog / full exoskeleton
+;
+; Mapped from bones_koeff_protection via actor_armor_classN (N+1) or named
+; actor_armor_* / actor_helm_* tables in damages.ltx.
+; Engine immunities and hit_fraction are NOT modified here.
+; =============================================================================
+
+; --- Novice / trenchcoat -------------------------------------------
+![bandit_novice_outfit]
+ztc_br_class = 1
+
+![bandit_novice_outfit_alt]
+ztc_br_class = 1
+
+![cs_light_novice_outfit]
+ztc_br_class = 2
+
+![cs_novice_outfit]
+ztc_br_class = 1
+
+![dolg_novice_outfit]
+ztc_br_class = 1
+
+![greh_trenchcoat_outfit]
+ztc_br_class = 3
+
+![monolith_trenchcoat_outfit]
+ztc_br_class = 3
+
+![novice_outfit]
+ztc_br_class = 1
+
+![novice_outfit_camo]
+ztc_br_class = 1
+
+![novice_outfit_tourist]
+ztc_br_class = 1
+
+![redline_novice_outfit]
+ztc_br_class = 1
+
+![svoboda_novice_outfit]
+ztc_br_class = 1
+
+![trenchcoat_brown_outfit]
+ztc_br_class = 3
+
+![trenchcoat_dolg_brown_outfit]
+ztc_br_class = 3
+
+![trenchcoat_freedom_brown_outfit]
+ztc_br_class = 3
+
+![trenchcoat_green_outfit]
+ztc_br_class = 3
+
+![trenchcoat_outfit]
+ztc_br_class = 1
+
+; --- Sunrise / stalker suits ---------------------------------------
+![ecolog_guard_outfit]
+ztc_br_class = 2
+
+![stalker_autumn_outfit]
+ztc_br_class = 3
+
+![stalker_bear_outfit]
+ztc_br_class = 3
+
+![stalker_drought_outfit]
+ztc_br_class = 3
+
+![stalker_graphite_outfit]
+ztc_br_class = 3
+
+![stalker_outfit]
+ztc_br_class = 2
+
+![stalker_predator_outfit]
+ztc_br_class = 3
+
+![stalker_salamander_outfit]
+ztc_br_class = 3
+
+![stalker_tigerstripe_outfit]
+ztc_br_class = 3
+
+; --- LCS / bandit jackets ------------------------------------------
+![bandit_sun_outfit]
+ztc_br_class = 2
+
+![banditmerc_outfit]
+ztc_br_class = 2
+
+![isg_lcs_camo_outfit]
+ztc_br_class = 2
+
+![isg_lcs_outfit]
+ztc_br_class = 2
+
+![isg_lcs_urban_outfit]
+ztc_br_class = 2
+
+; --- STS / PS5 -----------------------------------------------------
+![bandit_ps5_outfit]
+ztc_br_class = 3
+
+![greh_ps5_outfit]
+ztc_br_class = 3
+
+; --- SEVA / scientific suits ---------------------------------------
+![bandit_scientific_dark_outfit]
+ztc_br_class = 3
+
+![bandit_scientific_outfit]
+ztc_br_class = 3
+
+![cs_scientific_outfit]
+ztc_br_class = 3
+
+![cs_scientific_outfit_good]
+ztc_br_class = 3
+
+![dolg_scientific_outfit]
+ztc_br_class = 3
+
+![dolg_scientific_red_outfit]
+ztc_br_class = 3
+
+![dolg_scientific_wood_outfit]
+ztc_br_class = 3
+
+![isg_scientific_outfit]
+ztc_br_class = 3
+
+![merc_combat_scientific_outfit]
+ztc_br_class = 4
+
+![merc_scientific_armored_outfit]
+ztc_br_class = 4
+
+![merc_scientific_outfit]
+ztc_br_class = 3
+
+![monolith_scientific_light_outfit]
+ztc_br_class = 3
+
+![monolith_scientific_outfit]
+ztc_br_class = 3
+
+![renegade_scientific_outfit]
+ztc_br_class = 3
+
+![scientific_outfit]
+ztc_br_class = 3
+
+![svoboda_scientific_outfit]
+ztc_br_class = 3
+
+; --- SSP-99 / NBC --------------------------------------------------
+![bandit_nbc_outfit]
+ztc_br_class = 2
+
+![cs_nbc_outfit]
+ztc_br_class = 2
+
+![monolith_nbc_outfit]
+ztc_br_class = 2
+
+![nbc_dolg_outfit]
+ztc_br_class = 2
+
+![nbc_freedom_outfit]
+ztc_br_class = 2
+
+![nbc_merc_outfit]
+ztc_br_class = 2
+
+![nbc_outfit]
+ztc_br_class = 2
+
+; --- Berill / specops ----------------------------------------------
+![specops_bandit_outfit]
+ztc_br_class = 4
+
+![specops_dolg_outfit]
+ztc_br_class = 4
+
+![specops_merc_outfit]
+ztc_br_class = 4
+
+![specops_outfit]
+ztc_br_class = 4
+
+; --- Clear Sky -----------------------------------------------------
+![cs_heavy_outfit]
+ztc_br_class = 4
+
+![cs_light_outfit]
+ztc_br_class = 2
+
+![cs_medium_outfit]
+ztc_br_class = 4
+
+![cs_stalker_outfit]
+ztc_br_class = 2
+
+; --- Assault vest (light plate) ------------------------------------
+![light_dolg_outfit]
+ztc_br_class = 4
+
+![light_freedom_outfit]
+ztc_br_class = 4
+
+![light_isg_outfit]
+ztc_br_class = 4
+
+![light_loner_outfit]
+ztc_br_class = 4
+
+![light_merc_outfit]
+ztc_br_class = 4
+
+![light_monolit_outfit]
+ztc_br_class = 4
+
+![light_voen_outfit]
+ztc_br_class = 4
+
+; --- Skat / PSZ / military suits -----------------------------------
+![dolg_heavy_outfit]
+ztc_br_class = 5
+
+![dolg_heavy_proto_exo_outfit]
+ztc_br_class = 5
+
+![military_bandit_outfit]
+ztc_br_class = 5
+
+![military_freedom_outfit]
+ztc_br_class = 5
+
+![military_merc_outfit]
+ztc_br_class = 5
+
+![military_monolit_outfit]
+ztc_br_class = 5
+
+![military_outfit]
+ztc_br_class = 5
+
+![military_proto_exo_outfit]
+ztc_br_class = 5
+
+![military_sky_outfit]
+ztc_br_class = 5
+
+; --- Exolight ------------------------------------------------------
+![bandit_exolight_outfit]
+ztc_br_class = 5
+
+![cs_exolight_outfit]
+ztc_br_class = 5
+
+![dolg_exolight_outfit]
+ztc_br_class = 5
+
+![exolight_outfit]
+ztc_br_class = 5
+
+![isg_exolight_outfit]
+ztc_br_class = 5
+
+![merc_exolight_outfit]
+ztc_br_class = 5
+
+![military_exolight_outfit]
+ztc_br_class = 5
+
+![monolith_exolight_outfit]
+ztc_br_class = 5
+
+![svoboda_exolight_outfit]
+ztc_br_class = 5
+
+; --- Exoskeleton / proto-exo ---------------------------------------
+![bandit_exo_outfit]
+ztc_br_class = 5
+
+![cs_exo_outfit]
+ztc_br_class = 5
+
+![cs_stalker_proto_exo_outfit]
+ztc_br_class = 2
+
+![dolg_exo_outfit]
+ztc_br_class = 5
+
+![dolg_proto_exo_outfit]
+ztc_br_class = 3
+
+![ecolog_exo_outfit]
+ztc_br_class = 5
+
+![ecolog_proto_exo_outfit]
+ztc_br_class = 2
+
+![exo_dolg_outfit]
+ztc_br_class = 6
+
+![exo_dolg_red_outfit]
+ztc_br_class = 6
+
+![exo_dolg_urban_outfit]
+ztc_br_class = 6
+
+![exo_dolg_wood_outfit]
+ztc_br_class = 6
+
+![exo_merc_grass_outfit]
+ztc_br_class = 6
+
+![exo_merc_urban_outfit]
+ztc_br_class = 6
+
+![exo_merc_wood_outfit]
+ztc_br_class = 6
+
+![exo_outfit]
+ztc_br_class = 5
+
+![exo_wood_outfit]
+ztc_br_class = 6
+
+![freedom_exo_vineleaf_outfit]
+ztc_br_class = 6
+
+![greh_exo_outfit]
+ztc_br_class = 5
+
+![isg_exo_outfit]
+ztc_br_class = 5
+
+![isg_proto_exo_outfit]
+ztc_br_class = 2
+
+![merc_exo_outfit]
+ztc_br_class = 5
+
+![military_exo_outfit]
+ztc_br_class = 6
+
+![monolith_exo_outfit]
+ztc_br_class = 5
+
+![monolith_proto_exo_outfit]
+ztc_br_class = 2
+
+![renegade_exo_outfit]
+ztc_br_class = 5
+
+![stalker_proto_exo_outfit]
+ztc_br_class = 2
+
+![svoboda_exo_outfit]
+ztc_br_class = 5
+
+![svoboda_light_proto_exo_outfit]
+ztc_br_class = 2
+
+; --- Nosorog -------------------------------------------------------
+![army_nosorog_outfit]
+ztc_br_class = 6
+
+![dolg_nosorog_outfit]
+ztc_br_class = 6
+
+![freedom_nosorog_outfit]
+ztc_br_class = 6
+
+![isg_nosorog_outfit]
+ztc_br_class = 6
+
+![merc_nosorog_outfit]
+ztc_br_class = 6
+
+![monolith_nosorog_outfit]
+ztc_br_class = 6
+
+; --- Explorer ------------------------------------------------------
+![nomad_outfit]
+ztc_br_class = 3
+
+![travel_outfit]
+ztc_br_class = 2
+
+![wastelander_outfit]
+ztc_br_class = 4
+
+; --- Helmets -------------------------------------------------------
+![helm_ach7]
+ztc_br_class = 2
+
+![helm_ach7ex]
+ztc_br_class = 2
+
+![helm_bandana]
+ztc_br_class = 0
+
+![helm_battle]
+ztc_br_class = 4
+
+![helm_cloth_mask]
+ztc_br_class = 0
+
+![helm_exo]
+ztc_br_class = 4
+
+![helm_hardhat]
+ztc_br_class = 2
+
+![helm_hardhat_snag]
+ztc_br_class = 2
+
+![helm_m40]
+ztc_br_class = 1
+
+![helm_m50]
+ztc_br_class = 1
+
+![helm_metro]
+ztc_br_class = 4
+
+![helm_ppm88]
+ztc_br_class = 1
+
+![helm_protective]
+ztc_br_class = 2
+
+![helm_ranger]
+ztc_br_class = 1
+
+![helm_resp]
+ztc_br_class = 1
+
+![helm_respirator]
+ztc_br_class = 1
+
+![helm_respirator_gp5]
+ztc_br_class = 1
+
+![helm_respirator_old]
+ztc_br_class = 1
+
+![helm_rp_bala]
+ztc_br_class = 0
+
+![helm_spartan]
+ztc_br_class = 5
+
+![helm_tactic]
+ztc_br_class = 3
+
+![tch_helmet]
+ztc_br_class = 1
+
+; --- Other outfits -------------------------------------------------
+![army_outfit]
+ztc_br_class = 2
+
+![dolg_heavy_redline_outfit]
+ztc_br_class = 5
+
+![dolg_outfit]
+ztc_br_class = 3
+
+![dolg_pantsir_outfit]
+ztc_br_class = 5
+
+![dolg_red_outfit]
+ztc_br_class = 2
+
+![dolg_scout_outfit]
+ztc_br_class = 2
+
+![dolg_specops_red_outfit]
+ztc_br_class = 4
+
+![dolg_voin_outfit]
+ztc_br_class = 4
+
+![ecolog_outfit_blue]
+ztc_br_class = 2
+
+![ecolog_outfit_green]
+ztc_br_class = 2
+
+![ecolog_outfit_orange]
+ztc_br_class = 2
+
+![ecolog_outfit_red]
+ztc_br_class = 2
+
+![ecolog_outfit_white]
+ztc_br_class = 2
+
+![ecolog_outfit_yello]
+ztc_br_class = 2
+
+![ghillie_outfit]
+ztc_br_class = 2
+
+![greh_armored_camo_outfit]
+ztc_br_class = 3
+
+![greh_armored_outfit]
+ztc_br_class = 3
+
+![hybrid_outfit]
+ztc_br_class = 4
+
+![isg_camo_outfit]
+ztc_br_class = 3
+
+![isg_outfit]
+ztc_br_class = 2
+
+![merc_ace_outfit]
+ztc_br_class = 4
+
+![merc_coyote_outfit]
+ztc_br_class = 3
+
+![merc_fighter_outfit]
+ztc_br_class = 2
+
+![merc_jackal_outfit]
+ztc_br_class = 3
+
+![merc_nighthunter_outfit]
+ztc_br_class = 4
+
+![merc_outfit]
+ztc_br_class = 2
+
+![merc_scout_outfit]
+ztc_br_class = 2
+
+![merc_sun_outfit]
+ztc_br_class = 2
+
+![merc_sunset_outfit]
+ztc_br_class = 3
+
+![merc_wolven_outfit]
+ztc_br_class = 3
+
+![monolith_outfit]
+ztc_br_class = 2
+
+![renegademerc_outfit]
+ztc_br_class = 2
+
+![svoboda_heavy_outfit]
+ztc_br_class = 4
+
+![svoboda_heavy_outfit_2]
+ztc_br_class = 2
+
+![svoboda_light_outfit]
+ztc_br_class = 2

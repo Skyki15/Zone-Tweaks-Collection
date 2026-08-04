@@ -2,6 +2,17 @@
 ; Must be named items_*.ltx to be included by configs/items/items/base.ltx
 ; Visuals/icon inherited from Scar (af_zhelch).
 
+[ztc_force_shield_absorbation]
+burn_immunity                                    = 0
+strike_immunity                                  = 0
+shock_immunity                                   = 0
+wound_immunity                                   = 0
+radiation_immunity                               = 0
+telepatic_immunity                               = 0
+chemical_burn_immunity                           = 0
+explosion_immunity                               = 0
+fire_wound_immunity                              = 0
+
 [af_ztc_faction_force_shield]:af_zhelch
 description                                      = st_af_ztc_faction_force_shield_descr
 inv_name                                         = st_af_ztc_faction_force_shield_name
@@ -12,7 +23,16 @@ quest_item                                       = true
 can_trade                                        = false
 belt                                             = true
 use_condition                                    = true
-condition                                        = 0.0
+condition                                        = 1.0
 degrade_rate                                     = 0
+health_restore_speed                             = 0
+radiation_restore_speed                          = 0
+satiety_restore_speed                            = 0
+power_restore_speed                              = 0
+bleeding_restore_speed                           = 0
+psy_health_restore_speed                         = 0
+additional_inventory_weight                      = 0
+additional_inventory_weight2                     = 0
+hit_absorbation_sect                             = ztc_force_shield_absorbation
 
 tier = 4

@@ -16,6 +16,14 @@
 		<text>Player-only: scales how much damage mutants deal to you (melee, psi, throws, etc.). Does not change your weapon damage against mutants. Changes apply immediately to new hits.</text>
 	</string>
 
+	<string id="ui_mcm_ztc_damage_ballistics_enabled">
+		<text>Enable immersive ballistics</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_ballistics_desc">
+		<text>Requires Immersive Ballistic System (16a). Toggles penetration, range drag, and global damage scaling on bullet hits. Balancing assumes Gameplay Difficulty Hit Power Factor is 1.0 — when enabled, resets Hit Power Factor to 1.0 on load and in MCM if your save had a different value. Changes apply immediately; ammo/outfit DLTX still load with the mod installed.</text>
+	</string>
+
 	<string id="ui_mcm_ztc_damage_mutants_title">
 		<text>Mutant Damage</text>
 	</string>

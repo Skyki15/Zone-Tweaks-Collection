@@ -1,0 +1,274 @@
+-- Loner quest reward sharing (ZTC Faction Tweaks).
+-- Splits quest money payouts among the actor and alive Loner companions.
+
+_G.ztc_faction_loners_quest_reward_share = _G.ztc_faction_loners_quest_reward_share or {}
+local share = _G.ztc_faction_loners_quest_reward_share
+
+local in_quest_reward = false
+local patches_installed = false
+
+local base_reward_random_money
+local base_reward_money
+local base_reward_random_money_by_dist
+local base_give_reward
+local base_reward_item_cost_mult_and_remove
+
+function share.is_feature_enabled()
+	if not ztc_faction_mcm or not ztc_faction_mcm.is_enabled then
+		return false
+	end
+	if not ztc_faction_mcm.is_enabled() then
+		return false
+	end
+	if ztc_faction_mcm.get_config("loners_share_quest_rewards_enabled") ~= true then
+		return false
+	end
+	return true
+end
+
+function share.is_loner_actor()
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid then
+		return false
+	end
+	if not ztc_faction_utils.actor_is_valid() then
+		return false
+	end
+	if get_actor_true_community then
+		return get_actor_true_community() == "stalker"
+	end
+	return false
+end
+
+function share.should_apply()
+	if in_quest_reward then
+		return false
+	end
+	return share.is_feature_enabled() and share.is_loner_actor()
+end
+
+function share.get_eligible_companion_ids()
+	if not axr_companions or not axr_companions.list_actor_squad_by_id then
+		return {}
+	end
+
+	local ids = axr_companions.list_actor_squad_by_id()
+	local eligible = {}
+	local count = 0
+
+	for i = 1, #ids do
+		local obj = get_object_by_id(ids[i])
+		if obj and obj:alive() and character_community and character_community(obj) == "stalker" then
+			count = count + 1
+			eligible[count] = ids[i]
+		end
+	end
+
+	return eligible
+end
+
+function share.apply_split(total_amount)
+	total_amount = math.floor(tonumber(total_amount) or 0)
+	if total_amount <= 0 then
+		return 0, 0, 0, {}
+	end
+
+	local companion_ids = share.get_eligible_companion_ids()
+	local companion_count = #companion_ids
+	if companion_count == 0 then
+		return total_amount, 0, 0, {}
+	end
+
+	local total_shares = 1 + companion_count
+	local share_per_person = math.floor(total_amount / total_shares)
+	local player_amount = share_per_person + (total_amount - (share_per_person * total_shares))
+
+	local companion_names = {}
+	for i = 1, companion_count do
+		local obj = get_object_by_id(companion_ids[i])
+		if obj then
+			companion_names[#companion_names + 1] = obj:character_name()
+		end
+	end
+
+	return player_amount, companion_count, share_per_person, companion_names
+end
+
+function share.send_split_tip(player_amount, companion_count, share_per_person, companion_names)
+	if companion_count <= 0 then
+		return
+	end
+
+	local msg
+	if companion_count == 1 then
+		msg = string.format(
+			game.translate_string("st_ztc_loners_quest_reward_share_one"),
+			player_amount,
+			share_per_person,
+			companion_names[1] or "your companion"
+		)
+	else
+		msg = string.format(
+			game.translate_string("st_ztc_loners_quest_reward_share_many"),
+			share_per_person,
+			companion_count,
+			share_per_person * companion_count
+		)
+	end
+
+	news_manager.send_tip(db.actor, msg, nil, nil, 10000)
+end
+
+function share.pay_quest_reward(total_amount)
+	total_amount = math.floor(tonumber(total_amount) or 0)
+	if total_amount <= 0 then
+		return
+	end
+
+	if not share.is_feature_enabled() or not share.is_loner_actor() then
+		dialogs.relocate_money(db.actor, total_amount, "in")
+		return
+	end
+
+	local player_amount, companion_count, share_per_person, companion_names = share.apply_split(total_amount)
+	dialogs.relocate_money(db.actor, player_amount, "in")
+	if companion_count > 0 then
+		share.send_split_tip(player_amount, companion_count, share_per_person, companion_names)
+	end
+end
+
+function ztc_faction_loners_quest_reward_share_reward_random_money(actor, npc, p)
+	if not share.should_apply() then
+		return base_reward_random_money(actor, npc, p)
+	end
+
+	local multi = game_difficulties.get_eco_factor("rewards") or 1
+	local min_val = ((tonumber(p[1]) or 500) * multi) / 50
+	local max_val = ((tonumber(p[2]) or (min_val + 1000)) * multi) / 50
+	local money = math.random(math.ceil(min_val), math.ceil(max_val)) * 50
+
+	in_quest_reward = true
+	share.pay_quest_reward(money)
+	in_quest_reward = false
+end
+
+function ztc_faction_loners_quest_reward_share_reward_money(actor, npc, p)
+	if not share.should_apply() then
+		return base_reward_money(actor, npc, p)
+	end
+
+	local multi = game_difficulties.get_eco_factor("rewards") or 1
+	local money = math.floor(tonumber(p[1] or 500) * multi)
+
+	in_quest_reward = true
+	share.pay_quest_reward(money)
+	in_quest_reward = false
+end
+
+function ztc_faction_loners_quest_reward_share_reward_random_money_by_dist(actor, npc, p)
+	if not share.should_apply() then
+		return base_reward_random_money_by_dist(actor, npc, p)
+	end
+
+	local var = load_var(db.actor, p[1])
+	local lvl_task = var and var.lvl_task or level.name()
+	local lvl_target = var and var.lvl_target
+	local n = lvl_task and lvl_target and txr_routes.get_shortest_path_num(lvl_task, lvl_target) or 1
+
+	local multi = game_difficulties.get_eco_factor("rewards") or 1
+	local min_val = ((tonumber(p[2]) or 500) * multi) / 50
+	local max_val = ((tonumber(p[3]) or (min_val + 1000)) * multi) / 50
+	local money = math.random(math.ceil(min_val), math.ceil(max_val)) * 50
+	local sweets = math.ceil(n * money * tonumber(p[4] or 0.2))
+
+	in_quest_reward = true
+	share.pay_quest_reward(money + sweets)
+	in_quest_reward = false
+end
+
+function ztc_faction_loners_quest_reward_share_give_reward(actor, npc, p)
+	local var = load_var(db.actor, p[1])
+	if not var then
+		return
+	end
+
+	local money = var.reward_money
+	if money and share.should_apply() then
+		var.reward_money = nil
+		base_give_reward(actor, npc, p)
+		var.reward_money = money
+
+		in_quest_reward = true
+		share.pay_quest_reward(money)
+		in_quest_reward = false
+		return
+	end
+
+	base_give_reward(actor, npc, p)
+end
+
+function ztc_faction_loners_quest_reward_share_reward_item_cost_mult_and_remove(actor, npc, p)
+	if not share.should_apply() then
+		return base_reward_item_cost_mult_and_remove(actor, npc, p)
+	end
+
+	local sec = load_var(db.actor, p[1])
+	if not sec then
+		return
+	end
+
+	local item = db.actor:object(sec)
+	if not item then
+		return
+	end
+
+	local cond = 1
+	if item:condition() then
+		cond = item:condition()
+	end
+
+	local multi = game_difficulties.get_eco_factor("rewards") or 1
+	local money = math.floor((tonumber(p[2]) or 1) * item:cost() * cond * cond * cond * multi)
+
+	in_quest_reward = true
+	share.pay_quest_reward(money)
+	in_quest_reward = false
+
+	xr_effects.remove_item(actor, npc, {sec, p[3]})
+end
+
+function share.install_patches()
+	if patches_installed then
+		return
+	end
+	if not xr_effects then
+		return
+	end
+
+	base_reward_random_money = xr_effects.reward_random_money
+	base_reward_money = xr_effects.reward_money
+	base_reward_random_money_by_dist = xr_effects.reward_random_money_by_dist
+	base_give_reward = xr_effects.give_reward
+	base_reward_item_cost_mult_and_remove = xr_effects.reward_item_cost_mult_and_remove
+
+	if base_reward_random_money then
+		xr_effects.reward_random_money = ztc_faction_loners_quest_reward_share_reward_random_money
+	end
+	if base_reward_money then
+		xr_effects.reward_money = ztc_faction_loners_quest_reward_share_reward_money
+	end
+	if base_reward_random_money_by_dist then
+		xr_effects.reward_random_money_by_dist = ztc_faction_loners_quest_reward_share_reward_random_money_by_dist
+	end
+	if base_give_reward then
+		xr_effects.give_reward = ztc_faction_loners_quest_reward_share_give_reward
+	end
+	if base_reward_item_cost_mult_and_remove then
+		xr_effects.reward_item_cost_mult_and_remove = ztc_faction_loners_quest_reward_share_reward_item_cost_mult_and_remove
+	end
+
+	patches_installed = true
+end
+
+function on_game_start()
+	share.install_patches()
+end

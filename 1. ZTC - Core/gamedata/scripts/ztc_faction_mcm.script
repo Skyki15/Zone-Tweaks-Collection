@@ -4,24 +4,75 @@ _G.ztc_faction_mcm = _G.ztc_faction_mcm or {}
 local mcm = _G.ztc_faction_mcm
 
 local MCM_ROOT = "ztc/faction_tweaks/"
+local SUB_LONERS = "loners"
+local SUB_BANDITS = "bandits"
+local SUB_CSKY = "csky"
+local SUB_DOLG = "dolg"
+local SUB_FREEDOM = "freedom"
+local SUB_MERCENARY = "mercenary"
+local SUB_MILITARY = "military"
+local SUB_ECOLOGIST = "ecologist"
 local SUB_MONOLITH = "monolith"
+local SUB_RENEGADE = "renegade"
 local SUB_SIN = "sin"
+local SUB_ISG = "isg"
 
 local defaults = {
 	enabled = false,
-	monolith_psy_immunity = false,
-	monolith_easier_companion_recruit = false,
+	paid_escort_always_available = true,
+	monolith_psy_immunity = true,
+	monolith_easier_companion_recruit = true,
+	monolith_rupture_resistance_actor_enabled = true,
+	monolith_rupture_resistance_npc_enabled = true,
 	monolith_rupture_resistance_actor = 20,
 	monolith_rupture_resistance_npc = 30,
-	sin_mutant_alliance_enabled = false,
+	mercenary_paid_escort_enabled = true,
+	mercenary_paid_escort_price_24h = 1500,
+	mercenary_paid_escort_price_48h = 3000,
+	loners_disable_vanilla_payment_recruitment = true,
+	loners_teamup_requests_enabled = true,
+	loners_teamup_requests_interval = 1500,
+	loners_teamup_requests_chance = 0.3,
+	loners_share_quest_rewards_enabled = true,
+	freedom_disable_vanilla_payment_recruitment = true,
+	bandit_start_with_companions = false,
+	bandit_start_with_companions_count = 2,
+	bandit_paid_escort_enabled = true,
+	bandit_paid_escort_price_24h = 1500,
+	bandit_paid_escort_price_48h = 3000,
+	renegade_start_with_companions = false,
+	renegade_start_with_companions_count = 2,
+	freedom_start_with_companions = false,
+	freedom_start_with_companions_count = 2,
+	dolg_start_with_companions = false,
+	dolg_start_with_companions_count = 2,
+	army_start_with_companions = false,
+	army_start_with_companions_count = 2,
+	isg_start_with_companions = false,
+	isg_start_with_companions_count = 2,
+	renegade_paid_escort_enabled = true,
+	renegade_paid_escort_price_24h = 1500,
+	renegade_paid_escort_price_48h = 3000,
+	sin_mutant_alliance_enabled = true,
 	sin_max_companions = 3,
 	sin_companion_teleport_dist = 30,
-	sin_squad_escorts_enabled = false,
+	sin_squad_escorts_enabled = true,
 	sin_squad_escort_chance = 40,
 	sin_squad_escorts_max_per_squad = 1,
 	sin_squad_escorts_max_active = 6,
-	force_shield_actor_enabled = false,
-	force_shield_npc_enabled = false,
+	dolg_disable_fleeing = true,
+	mercenary_disable_fleeing = true,
+	military_disable_fleeing = true,
+	sin_disable_fleeing = true,
+	isg_disable_fleeing = true,
+	loners_disable_high_rank_fleeing = true,
+	bandits_disable_high_rank_fleeing = true,
+	csky_disable_high_rank_fleeing = true,
+	freedom_disable_high_rank_fleeing = true,
+	ecologist_disable_high_rank_fleeing = true,
+	renegade_disable_high_rank_fleeing = true,
+	force_shield_actor_enabled = true,
+	force_shield_npc_enabled = true,
 	force_shield_player_bullet_reduction = 40,
 	force_shield_npc_bullet_reduction = 60,
 	force_shield_recharge_normal_sec = 5,
@@ -30,10 +81,41 @@ local defaults = {
 }
 
 local def_map = {
+	enabled = "settings",
+	paid_escort_always_available = "settings",
 	monolith_psy_immunity = SUB_MONOLITH,
 	monolith_easier_companion_recruit = SUB_MONOLITH,
+	monolith_rupture_resistance_actor_enabled = SUB_MONOLITH,
+	monolith_rupture_resistance_npc_enabled = SUB_MONOLITH,
 	monolith_rupture_resistance_actor = SUB_MONOLITH,
 	monolith_rupture_resistance_npc = SUB_MONOLITH,
+	mercenary_paid_escort_enabled = SUB_MERCENARY,
+	mercenary_paid_escort_price_24h = SUB_MERCENARY,
+	mercenary_paid_escort_price_48h = SUB_MERCENARY,
+	loners_disable_vanilla_payment_recruitment = SUB_LONERS,
+	loners_teamup_requests_enabled = SUB_LONERS,
+	loners_teamup_requests_interval = SUB_LONERS,
+	loners_teamup_requests_chance = SUB_LONERS,
+	loners_share_quest_rewards_enabled = SUB_LONERS,
+	freedom_disable_vanilla_payment_recruitment = SUB_FREEDOM,
+	bandit_start_with_companions = SUB_BANDITS,
+	bandit_start_with_companions_count = SUB_BANDITS,
+	bandit_paid_escort_enabled = SUB_BANDITS,
+	bandit_paid_escort_price_24h = SUB_BANDITS,
+	bandit_paid_escort_price_48h = SUB_BANDITS,
+	renegade_start_with_companions = SUB_RENEGADE,
+	renegade_start_with_companions_count = SUB_RENEGADE,
+	freedom_start_with_companions = SUB_FREEDOM,
+	freedom_start_with_companions_count = SUB_FREEDOM,
+	dolg_start_with_companions = SUB_DOLG,
+	dolg_start_with_companions_count = SUB_DOLG,
+	army_start_with_companions = SUB_MILITARY,
+	army_start_with_companions_count = SUB_MILITARY,
+	isg_start_with_companions = SUB_ISG,
+	isg_start_with_companions_count = SUB_ISG,
+	renegade_paid_escort_enabled = SUB_RENEGADE,
+	renegade_paid_escort_price_24h = SUB_RENEGADE,
+	renegade_paid_escort_price_48h = SUB_RENEGADE,
 	sin_mutant_alliance_enabled = SUB_SIN,
 	sin_max_companions = SUB_SIN,
 	sin_companion_teleport_dist = SUB_SIN,
@@ -41,6 +123,17 @@ local def_map = {
 	sin_squad_escort_chance = SUB_SIN,
 	sin_squad_escorts_max_per_squad = SUB_SIN,
 	sin_squad_escorts_max_active = SUB_SIN,
+	dolg_disable_fleeing = SUB_DOLG,
+	mercenary_disable_fleeing = SUB_MERCENARY,
+	military_disable_fleeing = SUB_MILITARY,
+	sin_disable_fleeing = SUB_SIN,
+	isg_disable_fleeing = SUB_ISG,
+	loners_disable_high_rank_fleeing = SUB_LONERS,
+	bandits_disable_high_rank_fleeing = SUB_BANDITS,
+	csky_disable_high_rank_fleeing = SUB_CSKY,
+	freedom_disable_high_rank_fleeing = SUB_FREEDOM,
+	ecologist_disable_high_rank_fleeing = SUB_ECOLOGIST,
+	renegade_disable_high_rank_fleeing = SUB_RENEGADE,
 	force_shield_actor_enabled = SUB_SIN,
 	force_shield_npc_enabled = SUB_SIN,
 	force_shield_player_bullet_reduction = SUB_SIN,
@@ -51,6 +144,23 @@ local def_map = {
 }
 
 local MCM_SETTINGS = MCM_ROOT .. "settings/"
+
+-- Read axr_options / MCM slider values without requiring Faction Tweaks master ON.
+function mcm.get_raw_mcm_value(key)
+	if not ui_mcm then
+		return nil
+	end
+
+	local section = def_map[key]
+	if section then
+		local val = ui_mcm.get(MCM_ROOT .. section .. "/" .. key)
+		if val ~= nil then
+			return val
+		end
+	end
+
+	return ui_mcm.get(MCM_ROOT .. key)
+end
 
 function mcm.is_enabled()
 	if ui_mcm then
@@ -99,6 +209,476 @@ function mcm.get_config(key)
 	return nil
 end
 
+function mcm.is_vanilla_payment_recruitment_disabled(key)
+	local config_key = key .. "_disable_vanilla_payment_recruitment"
+	if defaults[config_key] == nil then
+		return false
+	end
+
+	if mcm.is_enabled() and ui_mcm then
+		local section = def_map[config_key]
+		if section then
+			local val = ui_mcm.get(MCM_ROOT .. section .. "/" .. config_key)
+			if val ~= nil then
+				return val == true
+			end
+		end
+	end
+
+	return defaults[config_key] == true
+end
+
+local function build_faction_placeholder_menu(section_id, title_id)
+	return {
+		id = section_id,
+		sh = true,
+		gr = {
+			{
+				id = "title",
+				type = "slide",
+				link = "ui_options_slider_disguise",
+				text = title_id,
+				size = {512, 50},
+				spacing = 20,
+			},
+			{
+				id = "placeholder_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_placeholder_desc",
+				clr = {255, 200, 200, 200},
+			},
+		},
+	}
+end
+
+local function build_start_companions_menu_items(faction_key, max_count)
+	max_count = max_count or 3
+	return {
+		{
+			id = faction_key .. "_start_with_companions",
+			type = "check",
+			val = 1,
+			def = defaults[faction_key .. "_start_with_companions"],
+			hint = "ztc_faction_" .. faction_key .. "_start_with_companions",
+		},
+		{
+			id = faction_key .. "_start_with_companions_desc",
+			type = "desc",
+			text = "ui_mcm_ztc_faction_" .. faction_key .. "_start_with_companions_desc",
+			clr = {255, 200, 200, 200},
+		},
+		{
+			id = faction_key .. "_start_with_companions_count",
+			type = "track",
+			val = 2,
+			min = 1,
+			max = max_count,
+			step = 1,
+			def = defaults[faction_key .. "_start_with_companions_count"],
+			hint = "ztc_faction_" .. faction_key .. "_start_with_companions_count",
+		},
+		{ id = "divider_" .. faction_key .. "_start_companions", type = "line" },
+	}
+end
+
+local function append_menu_items(gr, items)
+	for i = 1, #items do
+		gr[#gr + 1] = items[i]
+	end
+end
+
+local function build_high_rank_flee_menu_items(key_prefix, with_divider)
+	local config_key = key_prefix .. "_disable_high_rank_fleeing"
+	local items = {}
+
+	if with_divider then
+		items[#items + 1] = { id = "divider_" .. key_prefix .. "_high_rank_flee", type = "line" }
+	end
+
+	items[#items + 1] = {
+		id = config_key,
+		type = "check",
+		val = 1,
+		def = defaults[config_key],
+		hint = "ztc_faction_" .. config_key,
+	}
+	items[#items + 1] = {
+		id = config_key .. "_desc",
+		type = "desc",
+		text = "ui_mcm_ztc_faction_disable_high_rank_fleeing_desc",
+		clr = {255, 200, 200, 200},
+	}
+
+	return items
+end
+
+local function build_high_rank_flee_only_menu(section_id, title_id, key_prefix)
+	local gr = {
+		{
+			id = "title",
+			type = "slide",
+			link = "ui_options_slider_disguise",
+			text = title_id,
+			size = {512, 50},
+			spacing = 20,
+		},
+	}
+
+	local flee_items = build_high_rank_flee_menu_items(key_prefix, false)
+	for i = 1, #flee_items do
+		gr[#gr + 1] = flee_items[i]
+	end
+
+	return {
+		id = section_id,
+		sh = true,
+		gr = gr,
+	}
+end
+
+local function build_loners_menu()
+	return {
+		id = SUB_LONERS,
+		sh = true,
+		gr = {
+			{
+				id = "title",
+				type = "slide",
+				link = "ui_options_slider_disguise",
+				text = "ui_mcm_ztc_faction_loners_title",
+				size = {512, 50},
+				spacing = 20,
+			},
+			{
+				id = "loners_disable_vanilla_payment_recruitment",
+				type = "check",
+				val = 1,
+				def = defaults.loners_disable_vanilla_payment_recruitment,
+				hint = "ztc_faction_loners_disable_vanilla_payment_recruitment",
+			},
+			{
+				id = "loners_disable_vanilla_payment_recruitment_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_loners_disable_vanilla_payment_recruitment_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{ id = "divider_loners_teamup", type = "line" },
+			{
+				id = "loners_teamup_requests_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_loners_teamup_requests_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "loners_teamup_requests_enabled",
+				type = "check",
+				val = 1,
+				def = defaults.loners_teamup_requests_enabled,
+				hint = "ztc_faction_loners_teamup_requests_enabled",
+			},
+			{
+				id = "loners_teamup_requests_interval",
+				type = "track",
+				val = 2,
+				min = 60,
+				max = 3600,
+				step = 60,
+				def = defaults.loners_teamup_requests_interval,
+				hint = "ztc_faction_loners_teamup_requests_interval",
+			},
+			{
+				id = "loners_teamup_requests_chance",
+				type = "track",
+				val = 2,
+				min = 0.01,
+				max = 1,
+				step = 0.01,
+				def = defaults.loners_teamup_requests_chance,
+				hint = "ztc_faction_loners_teamup_requests_chance",
+			},
+			{ id = "divider_loners_quest_rewards", type = "line" },
+			{
+				id = "loners_share_quest_rewards_enabled",
+				type = "check",
+				val = 1,
+				def = defaults.loners_share_quest_rewards_enabled,
+				hint = "ztc_faction_loners_share_quest_rewards_enabled",
+			},
+			{
+				id = "loners_share_quest_rewards_enabled_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_loners_share_quest_rewards_enabled_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{ id = "divider_loners_high_rank_flee", type = "line" },
+			{
+				id = "loners_disable_high_rank_fleeing",
+				type = "check",
+				val = 1,
+				def = defaults.loners_disable_high_rank_fleeing,
+				hint = "ztc_faction_loners_disable_high_rank_fleeing",
+			},
+			{
+				id = "loners_disable_high_rank_fleeing_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_disable_high_rank_fleeing_desc",
+				clr = {255, 200, 200, 200},
+			},
+		},
+	}
+end
+
+local function build_csky_menu()
+	return build_high_rank_flee_only_menu(SUB_CSKY, "ui_mcm_ztc_faction_csky_title", "csky")
+end
+
+local function build_dolg_menu()
+	local gr = {
+		{
+			id = "title",
+			type = "slide",
+			link = "ui_options_slider_disguise",
+			text = "ui_mcm_ztc_faction_dolg_title",
+			size = {512, 50},
+			spacing = 20,
+		},
+	}
+	append_menu_items(gr, build_start_companions_menu_items("dolg", 2))
+	gr[#gr + 1] = {
+		id = "dolg_disable_fleeing",
+		type = "check",
+		val = 1,
+		def = defaults.dolg_disable_fleeing,
+		hint = "ztc_faction_dolg_disable_fleeing",
+	}
+	gr[#gr + 1] = {
+		id = "dolg_disable_fleeing_desc",
+		type = "desc",
+		text = "ui_mcm_ztc_faction_disable_fleeing_desc",
+		clr = {255, 200, 200, 200},
+	}
+	return {
+		id = SUB_DOLG,
+		sh = true,
+		gr = gr,
+	}
+end
+
+local function build_freedom_menu()
+	local gr = {
+		{
+			id = "title",
+			type = "slide",
+			link = "ui_options_slider_disguise",
+			text = "ui_mcm_ztc_faction_freedom_title",
+			size = {512, 50},
+			spacing = 20,
+		},
+	}
+	append_menu_items(gr, build_start_companions_menu_items("freedom", 2))
+	gr[#gr + 1] = {
+		id = "freedom_disable_vanilla_payment_recruitment",
+		type = "check",
+		val = 1,
+		def = defaults.freedom_disable_vanilla_payment_recruitment,
+		hint = "ztc_faction_freedom_disable_vanilla_payment_recruitment",
+	}
+	gr[#gr + 1] = {
+		id = "freedom_disable_vanilla_payment_recruitment_desc",
+		type = "desc",
+		text = "ui_mcm_ztc_faction_freedom_disable_vanilla_payment_recruitment_desc",
+		clr = {255, 200, 200, 200},
+	}
+	gr[#gr + 1] = { id = "divider_freedom_high_rank_flee", type = "line" }
+	gr[#gr + 1] = {
+		id = "freedom_disable_high_rank_fleeing",
+		type = "check",
+		val = 1,
+		def = defaults.freedom_disable_high_rank_fleeing,
+		hint = "ztc_faction_freedom_disable_high_rank_fleeing",
+	}
+	gr[#gr + 1] = {
+		id = "freedom_disable_high_rank_fleeing_desc",
+		type = "desc",
+		text = "ui_mcm_ztc_faction_disable_high_rank_fleeing_desc",
+		clr = {255, 200, 200, 200},
+	}
+	return {
+		id = SUB_FREEDOM,
+		sh = true,
+		gr = gr,
+	}
+end
+
+local function build_military_menu()
+	local gr = {
+		{
+			id = "title",
+			type = "slide",
+			link = "ui_options_slider_disguise",
+			text = "ui_mcm_ztc_faction_military_title",
+			size = {512, 50},
+			spacing = 20,
+		},
+	}
+	append_menu_items(gr, build_start_companions_menu_items("army", 2))
+	gr[#gr + 1] = {
+		id = "military_disable_fleeing",
+		type = "check",
+		val = 1,
+		def = defaults.military_disable_fleeing,
+		hint = "ztc_faction_military_disable_fleeing",
+	}
+	gr[#gr + 1] = {
+		id = "military_disable_fleeing_desc",
+		type = "desc",
+		text = "ui_mcm_ztc_faction_disable_fleeing_desc",
+		clr = {255, 200, 200, 200},
+	}
+	return {
+		id = SUB_MILITARY,
+		sh = true,
+		gr = gr,
+	}
+end
+
+local function build_ecologist_menu()
+	return build_high_rank_flee_only_menu(SUB_ECOLOGIST, "ui_mcm_ztc_faction_ecologist_title", "ecologist")
+end
+
+local function build_renegade_menu()
+	return {
+		id = SUB_RENEGADE,
+		sh = true,
+		gr = {
+			{
+				id = "title",
+				type = "slide",
+				link = "ui_options_slider_disguise",
+				text = "ui_mcm_ztc_faction_renegade_title",
+				size = {512, 50},
+				spacing = 20,
+			},
+			{
+				id = "renegade_start_with_companions",
+				type = "check",
+				val = 1,
+				def = defaults.renegade_start_with_companions,
+				hint = "ztc_faction_renegade_start_with_companions",
+			},
+			{
+				id = "renegade_start_with_companions_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_renegade_start_with_companions_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "renegade_start_with_companions_count",
+				type = "track",
+				val = 2,
+				min = 1,
+				max = 3,
+				step = 1,
+				def = defaults.renegade_start_with_companions_count,
+				hint = "ztc_faction_renegade_start_with_companions_count",
+			},
+			{ id = "divider_renegade_start_companions", type = "line" },
+			{
+				id = "renegade_paid_escort_enabled",
+				type = "check",
+				val = 1,
+				def = defaults.renegade_paid_escort_enabled,
+				hint = "ztc_faction_renegade_paid_escort_enabled",
+			},
+			{
+				id = "renegade_paid_escort_enabled_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_renegade_paid_escort_enabled_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{ id = "divider_renegade_prices", type = "line" },
+			{
+				id = "renegade_paid_escort_price_24h_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_renegade_paid_escort_price_24h_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "renegade_paid_escort_price_24h",
+				type = "track",
+				val = 2,
+				min = 500,
+				max = 15000,
+				step = 100,
+				def = defaults.renegade_paid_escort_price_24h,
+				hint = "ztc_faction_renegade_paid_escort_price_24h",
+			},
+			{
+				id = "renegade_paid_escort_price_48h_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_renegade_paid_escort_price_48h_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "renegade_paid_escort_price_48h",
+				type = "track",
+				val = 2,
+				min = 1000,
+				max = 30000,
+				step = 100,
+				def = defaults.renegade_paid_escort_price_48h,
+				hint = "ztc_faction_renegade_paid_escort_price_48h",
+			},
+			{ id = "divider_renegade_high_rank_flee", type = "line" },
+			{
+				id = "renegade_disable_high_rank_fleeing",
+				type = "check",
+				val = 1,
+				def = defaults.renegade_disable_high_rank_fleeing,
+				hint = "ztc_faction_renegade_disable_high_rank_fleeing",
+			},
+			{
+				id = "renegade_disable_high_rank_fleeing_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_disable_high_rank_fleeing_desc",
+				clr = {255, 200, 200, 200},
+			},
+		},
+	}
+end
+
+local function build_isg_menu()
+	local gr = {
+		{
+			id = "title",
+			type = "slide",
+			link = "ui_options_slider_disguise",
+			text = "ui_mcm_ztc_faction_isg_title",
+			size = {512, 50},
+			spacing = 20,
+		},
+	}
+	append_menu_items(gr, build_start_companions_menu_items("isg", 2))
+	gr[#gr + 1] = {
+		id = "isg_disable_fleeing",
+		type = "check",
+		val = 1,
+		def = defaults.isg_disable_fleeing,
+		hint = "ztc_faction_isg_disable_fleeing",
+	}
+	gr[#gr + 1] = {
+		id = "isg_disable_fleeing_desc",
+		type = "desc",
+		text = "ui_mcm_ztc_faction_disable_fleeing_desc",
+		clr = {255, 200, 200, 200},
+	}
+	return {
+		id = SUB_ISG,
+		sh = true,
+		gr = gr,
+	}
+end
+
 local function build_faction_settings_menu()
 	return {
 		id = "settings",
@@ -124,6 +704,20 @@ local function build_faction_settings_menu()
 				id = "enabled_desc",
 				type = "desc",
 				text = "ui_mcm_ztc_faction_enabled_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{ id = "divider_paid_escort", type = "line" },
+			{
+				id = "paid_escort_always_available",
+				type = "check",
+				val = 1,
+				def = defaults.paid_escort_always_available,
+				hint = "ztc_faction_paid_escort_always_available",
+			},
+			{
+				id = "paid_escort_always_available_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_paid_escort_always_available_desc",
 				clr = {255, 200, 200, 200},
 			},
 		},
@@ -170,6 +764,13 @@ local function build_monolith_menu()
 				clr = {255, 200, 200, 200},
 			},
 			{
+				id = "monolith_rupture_resistance_actor_enabled",
+				type = "check",
+				val = 1,
+				def = defaults.monolith_rupture_resistance_actor_enabled,
+				hint = "ztc_faction_monolith_rupture_resistance_actor_enabled",
+			},
+			{
 				id = "monolith_rupture_resistance_actor",
 				type = "track",
 				val = 2,
@@ -178,6 +779,13 @@ local function build_monolith_menu()
 				step = 1,
 				def = defaults.monolith_rupture_resistance_actor,
 				hint = "ztc_faction_monolith_rupture_resistance_actor",
+			},
+			{
+				id = "monolith_rupture_resistance_npc_enabled",
+				type = "check",
+				val = 1,
+				def = defaults.monolith_rupture_resistance_npc_enabled,
+				hint = "ztc_faction_monolith_rupture_resistance_npc_enabled",
 			},
 			{
 				id = "monolith_rupture_resistance_npc",
@@ -205,6 +813,19 @@ local function build_sin_menu()
 				text = "ui_mcm_ztc_faction_sin_title",
 				size = {512, 50},
 				spacing = 20,
+			},
+			{
+				id = "sin_disable_fleeing",
+				type = "check",
+				val = 1,
+				def = defaults.sin_disable_fleeing,
+				hint = "ztc_faction_sin_disable_fleeing",
+			},
+			{
+				id = "sin_disable_fleeing_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_disable_fleeing_desc",
+				clr = {255, 200, 200, 200},
 			},
 			{
 				id = "sin_mutant_alliance_enabled",
@@ -315,7 +936,7 @@ local function build_sin_menu()
 				type = "track",
 				val = 2,
 				min = 10,
-				max = 80,
+				max = 50,
 				step = 5,
 				def = defaults.force_shield_player_bullet_reduction,
 				hint = "ztc_faction_force_shield_player_bullet_reduction",
@@ -386,13 +1007,201 @@ local function build_sin_menu()
 	}
 end
 
+local function build_mercenary_menu()
+	return {
+		id = SUB_MERCENARY,
+		sh = true,
+		gr = {
+			{
+				id = "title",
+				type = "slide",
+				link = "ui_options_slider_disguise",
+				text = "ui_mcm_ztc_faction_mercenary_title",
+				size = {512, 50},
+				spacing = 20,
+			},
+			{
+				id = "mercenary_disable_fleeing",
+				type = "check",
+				val = 1,
+				def = defaults.mercenary_disable_fleeing,
+				hint = "ztc_faction_mercenary_disable_fleeing",
+			},
+			{
+				id = "mercenary_disable_fleeing_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_disable_fleeing_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{ id = "divider_mercenary_escort", type = "line" },
+			{
+				id = "mercenary_paid_escort_enabled",
+				type = "check",
+				val = 1,
+				def = defaults.mercenary_paid_escort_enabled,
+				hint = "ztc_faction_mercenary_paid_escort_enabled",
+			},
+			{
+				id = "mercenary_paid_escort_enabled_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_mercenary_paid_escort_enabled_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{ id = "divider_mercenary_prices", type = "line" },
+			{
+				id = "mercenary_paid_escort_price_24h_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_mercenary_paid_escort_price_24h_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "mercenary_paid_escort_price_24h",
+				type = "track",
+				val = 2,
+				min = 500,
+				max = 15000,
+				step = 100,
+				def = defaults.mercenary_paid_escort_price_24h,
+				hint = "ztc_faction_mercenary_paid_escort_price_24h",
+			},
+			{
+				id = "mercenary_paid_escort_price_48h_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_mercenary_paid_escort_price_48h_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "mercenary_paid_escort_price_48h",
+				type = "track",
+				val = 2,
+				min = 1000,
+				max = 30000,
+				step = 100,
+				def = defaults.mercenary_paid_escort_price_48h,
+				hint = "ztc_faction_mercenary_paid_escort_price_48h",
+			},
+		},
+	}
+end
+
+local function build_bandits_menu()
+	return {
+		id = SUB_BANDITS,
+		sh = true,
+		gr = {
+			{
+				id = "title",
+				type = "slide",
+				link = "ui_options_slider_disguise",
+				text = "ui_mcm_ztc_faction_bandits_title",
+				size = {512, 50},
+				spacing = 20,
+			},
+			{
+				id = "bandit_start_with_companions",
+				type = "check",
+				val = 1,
+				def = defaults.bandit_start_with_companions,
+				hint = "ztc_faction_bandit_start_with_companions",
+			},
+			{
+				id = "bandit_start_with_companions_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_bandit_start_with_companions_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "bandit_start_with_companions_count",
+				type = "track",
+				val = 2,
+				min = 1,
+				max = 3,
+				step = 1,
+				def = defaults.bandit_start_with_companions_count,
+				hint = "ztc_faction_bandit_start_with_companions_count",
+			},
+			{ id = "divider_bandit_start_companions", type = "line" },
+			{
+				id = "bandit_paid_escort_enabled",
+				type = "check",
+				val = 1,
+				def = defaults.bandit_paid_escort_enabled,
+				hint = "ztc_faction_bandit_paid_escort_enabled",
+			},
+			{
+				id = "bandit_paid_escort_enabled_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_bandit_paid_escort_enabled_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{ id = "divider_bandit_prices", type = "line" },
+			{
+				id = "bandit_paid_escort_price_24h_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_bandit_paid_escort_price_24h_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "bandit_paid_escort_price_24h",
+				type = "track",
+				val = 2,
+				min = 500,
+				max = 15000,
+				step = 100,
+				def = defaults.bandit_paid_escort_price_24h,
+				hint = "ztc_faction_bandit_paid_escort_price_24h",
+			},
+			{
+				id = "bandit_paid_escort_price_48h_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_bandit_paid_escort_price_48h_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{
+				id = "bandit_paid_escort_price_48h",
+				type = "track",
+				val = 2,
+				min = 1000,
+				max = 30000,
+				step = 100,
+				def = defaults.bandit_paid_escort_price_48h,
+				hint = "ztc_faction_bandit_paid_escort_price_48h",
+			},
+			{ id = "divider_bandits_high_rank_flee", type = "line" },
+			{
+				id = "bandits_disable_high_rank_fleeing",
+				type = "check",
+				val = 1,
+				def = defaults.bandits_disable_high_rank_fleeing,
+				hint = "ztc_faction_bandits_disable_high_rank_fleeing",
+			},
+			{
+				id = "bandits_disable_high_rank_fleeing_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_faction_disable_high_rank_fleeing_desc",
+				clr = {255, 200, 200, 200},
+			},
+		},
+	}
+end
+
 function mcm.build_faction_tweaks_menu()
 	return {
 		id = "faction_tweaks",
 		gr = {
 			build_faction_settings_menu(),
+			build_loners_menu(),
+			build_bandits_menu(),
+			build_csky_menu(),
+			build_dolg_menu(),
+			build_freedom_menu(),
+			build_mercenary_menu(),
+			build_military_menu(),
+			build_ecologist_menu(),
 			build_monolith_menu(),
+			build_renegade_menu(),
 			build_sin_menu(),
+			build_isg_menu(),
 		},
 	}
 end

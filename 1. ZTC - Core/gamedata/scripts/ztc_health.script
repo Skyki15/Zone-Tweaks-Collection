@@ -1,4 +1,4 @@
--- Zone Tweaks Collection — NPC & mutant health scaling (spawn + before_hit)
+-- Zone Tweaks Collection — NPC & mutant max-health scaling on spawn
 
 _G.ztc_health = _G.ztc_health or {}
 local mod = _G.ztc_health
@@ -9,6 +9,7 @@ local MCM_SETTINGS = MCM_ROOT .. "settings/"
 local MCM_STALKER = MCM_ROOT .. "stalker/"
 local MCM_MUTANTS = MCM_ROOT .. "mutants/"
 local APPLY_DELAY = 0.05
+local MCM_REAPPLY_DELAY = 0.05
 
 mod.settings = mod.settings or {
 	enabled             = false,
@@ -17,6 +18,7 @@ mod.settings = mod.settings or {
 	exclude_traders     = false,
 	reapply_on_change   = false,
 	rank_multipliers    = {},
+	faction_multipliers = {},
 	species_multipliers = {},
 }
 
@@ -32,7 +34,7 @@ local function mcm_path_for_key(key)
 	if key == "enabled" or key == "reapply_on_change" then
 		return MCM_SETTINGS .. key
 	end
-	if key:match("^rank_") or key:match("^exclude_") then
+	if key:match("^rank_") or key:match("^exclude_") or key:match("^faction_") then
 		return MCM_STALKER .. key
 	end
 	if key:match("^species_") then
@@ -58,6 +60,11 @@ local function mcm_get(key)
 		return data.get_rank_default(rank)
 	end
 
+	local faction = key:match("^faction_(.+)$")
+	if faction then
+		return data.get_faction_default(faction)
+	end
+
 	local species = key:match("^species_(.+)$")
 	if species then
 		return data.get_species_default(species)
@@ -81,6 +88,12 @@ function mod.load_settings()
 		s.rank_multipliers[rank] = data.clamp_multiplier(mcm_get("rank_" .. rank))
 	end
 
+	s.faction_multipliers = {}
+	for i = 1, #data.STALKER_FACTIONS do
+		local faction = data.STALKER_FACTIONS[i]
+		s.faction_multipliers[faction] = data.clamp_multiplier(mcm_get("faction_" .. faction))
+	end
+
 	s.species_multipliers = {}
 	for i = 1, #data.MUTANT_SPECIES do
 		local species = data.MUTANT_SPECIES[i]
@@ -92,12 +105,35 @@ local function get_settings()
 	return mod.settings
 end
 
-local function get_npc_multiplier(obj)
-	local rank = data.get_stalker_rank(obj)
-	if not rank then
-		return data.DEFAULT_MULT
+local function is_creature_obj(obj)
+	return obj and (IsMonster(obj) or IsStalker(obj))
+end
+
+local function obj_is_alive(obj)
+	if not is_creature_obj(obj) then
+		return false
 	end
-	return get_settings().rank_multipliers[rank] or data.DEFAULT_MULT
+
+	local ok, alive = pcall(function()
+		return obj:alive()
+	end)
+	return ok and alive == true
+end
+
+local function get_npc_multiplier(obj)
+	local rank_mult = data.DEFAULT_MULT
+	local rank = data.get_stalker_rank(obj)
+	if rank then
+		rank_mult = get_settings().rank_multipliers[rank] or data.DEFAULT_MULT
+	end
+
+	local faction_mult = data.DEFAULT_MULT
+	local faction = data.get_stalker_faction(obj)
+	if faction then
+		faction_mult = get_settings().faction_multipliers[faction] or data.DEFAULT_MULT
+	end
+
+	return data.combine_multipliers(rank_mult, faction_mult)
 end
 
 local function get_mutant_multiplier(obj, se_obj)
@@ -113,7 +149,11 @@ local function is_story_npc(obj)
 end
 
 local function should_skip_npc(obj)
-	if not obj or not obj:alive() then
+	if not obj or not IsStalker(obj) then
+		return true
+	end
+
+	if not obj_is_alive(obj) then
 		return true
 	end
 
@@ -142,85 +182,64 @@ local function should_skip_npc(obj)
 end
 
 local function should_skip_mutant(obj)
-	if not obj or not obj:alive() then
+	if not obj or not IsMonster(obj) then
 		return true
 	end
 
-	return not IsMonster(obj)
+	if not obj_is_alive(obj) then
+		return true
+	end
+
+	return false
 end
 
-local function apply_spawn_health(obj, multiplier)
-	if not obj or not obj:alive() then
-		return
+local function set_entity_max_health(obj, multiplier)
+	if not obj.set_max_health then
+		return false
 	end
 
-	multiplier = data.clamp_multiplier(multiplier)
-	if multiplier >= data.DEFAULT_MULT then
-		return
-	end
-
-	obj:set_health_ex(multiplier)
+	local ok = pcall(function()
+		obj:set_max_health(multiplier)
+		obj.health = multiplier
+	end)
+	return ok
 end
 
 local function reset_spawn_health(obj)
-	if obj and obj:alive() then
-		obj:set_health_ex(data.DEFAULT_MULT)
+	if not obj_is_alive(obj) then
+		return
 	end
+
+	if set_entity_max_health(obj, data.DEFAULT_MULT) then
+		return
+	end
+
+	pcall(function()
+		obj:set_health_ex(data.DEFAULT_MULT)
+	end)
 end
 
-local function scale_hit_power(shit, multiplier)
-	if not shit or not shit.power or shit.power <= 0 then
+local function apply_spawn_health(obj, multiplier)
+	if not obj_is_alive(obj) then
 		return
 	end
 
 	multiplier = data.clamp_multiplier(multiplier)
-	if multiplier <= data.DEFAULT_MULT then
+	if multiplier == data.DEFAULT_MULT then
+		reset_spawn_health(obj)
 		return
 	end
 
-	shit.power = shit.power / multiplier
-end
-
-function ztc_health_on_npc_before_hit(npc, shit, bone_id, flags)
-	local s = get_settings()
-	if not s.enabled or not npc then
+	if set_entity_max_health(obj, multiplier) then
 		return
 	end
 
-	local ok, alive = pcall(function()
-		return npc:alive()
-	end)
-	if not ok or not alive or should_skip_npc(npc) then
-		return
+	-- Fallback when set_max_health is unavailable (vanilla engine): wounded spawn only
+	if multiplier < data.DEFAULT_MULT then
+		pcall(function()
+			obj:set_health_ex(multiplier)
+		end)
 	end
-
-	local mult = get_npc_multiplier(npc)
-	if mult <= data.DEFAULT_MULT then
-		return
-	end
-
-	scale_hit_power(shit, mult)
-end
-
-function ztc_health_on_monster_before_hit(monster, shit, bone_id, flags)
-	local s = get_settings()
-	if not s.enabled or not monster then
-		return
-	end
-
-	local ok, alive = pcall(function()
-		return monster:alive()
-	end)
-	if not ok or not alive or should_skip_mutant(monster) then
-		return
-	end
-
-	local mult = get_mutant_multiplier(monster, nil)
-	if mult <= data.DEFAULT_MULT then
-		return
-	end
-
-	scale_hit_power(shit, mult)
 end
 
 local function apply_to_npc(obj)
@@ -284,7 +303,7 @@ local function restore_default_health()
 
 	for id, st in pairs(db.storage or {}) do
 		local obj = st and st.object or level.object_by_id(id)
-		if obj and obj:alive() and IsMonster(obj) and not should_skip_mutant(obj) then
+		if obj and IsMonster(obj) and not should_skip_mutant(obj) then
 			reset_spawn_health(obj)
 		end
 	end
@@ -295,12 +314,7 @@ local function reapply_entity(obj, get_mult_fn, skip_fn, se_obj)
 		return
 	end
 
-	local mult = get_mult_fn(obj, se_obj)
-	if mult < data.DEFAULT_MULT then
-		apply_spawn_health(obj, mult)
-	else
-		reset_spawn_health(obj)
-	end
+	apply_spawn_health(obj, get_mult_fn(obj, se_obj))
 end
 
 local function reapply_online_entities()
@@ -313,7 +327,7 @@ local function reapply_online_entities()
 
 	for id, st in pairs(db.storage or {}) do
 		local obj = st and st.object or level.object_by_id(id)
-		if obj and obj:alive() and IsMonster(obj) then
+		if obj and IsMonster(obj) then
 			reapply_entity(obj, get_mutant_multiplier, should_skip_mutant, nil)
 		end
 	end
@@ -335,8 +349,15 @@ function ztc_health_on_settings_changed()
 	reapply_online_entities()
 end
 
-function ztc_health_on_option_change(mcm)
-	ztc_health_on_settings_changed()
+function ztc_health_on_option_change(option_id)
+	if option_id and type(option_id) == "string" and string.find(option_id, "ztc/health_tweaks", 1, true) ~= 1 then
+		return
+	end
+
+	CreateTimeEvent("ztc_health", "mcm_reapply", MCM_REAPPLY_DELAY, function()
+		ztc_health_on_settings_changed()
+		return true
+	end)
 end
 
 function on_game_start()
@@ -344,7 +365,5 @@ function on_game_start()
 
 	RegisterScriptCallback("npc_on_net_spawn", ztc_health_on_npc_net_spawn)
 	RegisterScriptCallback("monster_on_net_spawn", ztc_health_on_monster_net_spawn)
-	RegisterScriptCallback("npc_on_before_hit", ztc_health_on_npc_before_hit)
-	RegisterScriptCallback("monster_on_before_hit", ztc_health_on_monster_before_hit)
 	RegisterScriptCallback("on_option_change", ztc_health_on_option_change)
 end

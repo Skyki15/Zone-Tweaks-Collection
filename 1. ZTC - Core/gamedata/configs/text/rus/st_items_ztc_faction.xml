@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="windows-1251" standalone="yes" ?>
+<string_table>
+	<string id="st_af_ztc_faction_force_shield_name">
+		<text>Цикатриса</text>
+	</string>
+
+	<string id="st_af_ztc_faction_force_shield_descr">
+		<text>Гравитационный артефакт, связанный с каждым бойцом ячейки Греха при посвящении. Носится на поясе артефактов: пока поле держит заряд, замедляет входящие пули и сбрасывает их скорость до плоти. Длительный огонь разрушает поле и разряжает артефакт; при обрушении защита пропадает, пока цикатриса полностью не зарастёт. Медленно перезаряжается в целом состоянии, быстрее — в сломанном. В рюкзаке поле тоже питается, но работает только с пояса. Слита с носителем — не продаётся, не выбрасывается и не прячется.</text>
+	</string>
+
+	<string id="st_af_ztc_faction_force_shield_charge">
+		<text>Заряд щита</text>
+	</string>
+
+	<string id="st_af_ztc_faction_force_shield_status_active">
+		<text>активен</text>
+	</string>
+
+	<string id="st_af_ztc_faction_force_shield_status_charging">
+		<text>заряжается</text>
+	</string>
+
+	<string id="st_af_ztc_faction_force_shield_status_standby">
+		<text>ожидание</text>
+	</string>
+
+	<string id="st_af_ztc_faction_force_shield_status_broken">
+		<text>сломан</text>
+	</string>
+</string_table>

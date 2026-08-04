@@ -1,0 +1,487 @@
+-- Zone Tweaks Collection — Start with Companions (Bandits / Renegades / Freedom / Duty / Military / UNISG)
+-- Survival-mode spawn (ui_mm_faction_select) + add_to_actor_squad when NPCs come online.
+
+local SAVE_KEY = "ztc_start_companions_v4"
+local STORAGE_FRESH_FACTION = "ztc_fresh_start_faction"
+local CONFIG_FRESH_FACTION = "ztc_fresh_start_faction"
+local EVENT_NAME = "ztc_start_companions"
+
+local start_hook_installed = false
+local spawn_scheduled = false
+local pending_recruit_ids = {}
+
+local FACTIONS = {
+	bandit = {
+		mcm_key = "bandit",
+		max_companions = 3,
+		communities = { bandit = true, actor_bandit = true },
+	},
+	renegade = {
+		mcm_key = "renegade",
+		max_companions = 3,
+		communities = { renegade = true, actor_renegade = true },
+	},
+	freedom = {
+		mcm_key = "freedom",
+		max_companions = 2,
+		communities = { freedom = true, actor_freedom = true },
+	},
+	dolg = {
+		mcm_key = "dolg",
+		max_companions = 2,
+		communities = { dolg = true, actor_dolg = true },
+	},
+	army = {
+		mcm_key = "army",
+		max_companions = 2,
+		communities = { army = true, actor_army = true },
+	},
+	isg = {
+		mcm_key = "isg",
+		max_companions = 2,
+		communities = { isg = true, actor_isg = true },
+	},
+}
+
+local SQUAD_SECTIONS = {
+	bandit = {
+		"ztc_start_squad_bandit_1",
+		"ztc_start_squad_bandit_2",
+		"ztc_start_squad_bandit_3",
+	},
+	renegade = {
+		"ztc_start_squad_renegade_1",
+		"ztc_start_squad_renegade_2",
+		"ztc_start_squad_renegade_3",
+	},
+	freedom = {
+		"ztc_start_squad_freedom_1",
+		"ztc_start_squad_freedom_2",
+		"ztc_start_squad_freedom_3",
+	},
+	dolg = {
+		"ztc_start_squad_dolg_1",
+		"ztc_start_squad_dolg_2",
+		"ztc_start_squad_dolg_3",
+	},
+	army = {
+		"ztc_start_squad_army_1",
+		"ztc_start_squad_army_2",
+		"ztc_start_squad_army_3",
+	},
+	isg = {
+		"ztc_start_squad_isg_1",
+		"ztc_start_squad_isg_2",
+		"ztc_start_squad_isg_3",
+	},
+}
+
+local function ztc_start_companions_is_supported_faction(faction)
+	return faction and FACTIONS[faction] ~= nil
+end
+
+local function ztc_start_companions_notify(string_id)
+	if news_manager and news_manager.send_tip and db.actor then
+		news_manager.send_tip(db.actor, string_id, nil, nil, 10000, nil)
+	end
+	printf("~ ZTC Start Companions | %s", tostring(string_id))
+end
+
+local function ztc_start_companions_mcm_master_enabled()
+	if not ztc_faction_mcm or not ztc_faction_mcm.is_enabled then
+		return false
+	end
+	return ztc_faction_mcm.is_enabled() == true
+end
+
+local function ztc_start_companions_faction_toggle_enabled(faction)
+	local cfg = FACTIONS[faction]
+	if not cfg or not ztc_faction_mcm then
+		return false
+	end
+
+	local key = cfg.mcm_key .. "_start_with_companions"
+	if ztc_faction_mcm.get_raw_mcm_value then
+		return ztc_faction_mcm.get_raw_mcm_value(key) == true
+	end
+	return ztc_faction_mcm.get_config and ztc_faction_mcm.get_config(key) == true
+end
+
+local function ztc_start_companions_get_count(faction)
+	local cfg = FACTIONS[faction]
+	if not cfg or not ztc_faction_mcm or not ztc_faction_mcm.get_raw_mcm_value then
+		return 2
+	end
+
+	local val = tonumber(ztc_faction_mcm.get_raw_mcm_value(cfg.mcm_key .. "_start_with_companions_count"))
+	local max_count = cfg.max_companions or 3
+	if val then
+		return math.max(1, math.min(max_count, math.floor(val)))
+	end
+	return math.min(2, max_count)
+end
+
+local function ztc_start_companions_actor_matches_faction(faction, actor_com)
+	local cfg = FACTIONS[faction]
+	if not cfg or not actor_com then
+		return false
+	end
+	return cfg.communities[actor_com] == true
+end
+
+local function ztc_start_companions_companions_active()
+	if axr_companions and axr_companions.Enabled then
+		return true
+	end
+	local ok, enabled = pcall(function()
+		local ini = ini_file("ai_tweaks\\axr_companions.ltx")
+		return ini and ini:r_bool_ex("main", "enable", false)
+	end)
+	return ok and enabled == true
+end
+
+local function ztc_start_companions_prepare_companion_api()
+	if axr_companions then
+		axr_companions.allow_simulation_squads_as_companions = true
+	end
+end
+
+local function ztc_start_companions_install_start_hook()
+	if start_hook_installed then
+		return true
+	end
+	if not ui_mm_faction_select or not ui_mm_faction_select.UINewGame then
+		return false
+	end
+
+	local orig = ui_mm_faction_select.UINewGame.OnStartGame
+	function ui_mm_faction_select.UINewGame:OnStartGame()
+		local fac = self.selected_faction
+		if ztc_start_companions_is_supported_faction(fac) then
+			if axr_main and axr_main.config then
+				axr_main.config:w_value("character_creation", CONFIG_FRESH_FACTION, fac)
+				axr_main.config:save()
+			end
+		end
+		return orig(self)
+	end
+
+	start_hook_installed = true
+	return true
+end
+
+local function ztc_start_companions_capture_fresh_start()
+	if ztc_start_companions_capture and ztc_start_companions_capture.capture_fresh_start then
+		ztc_start_companions_capture.capture_fresh_start()
+		return
+	end
+
+	local state = alife_storage_manager and alife_storage_manager.get_state and alife_storage_manager.get_state()
+	if not state or state[STORAGE_FRESH_FACTION] then
+		return
+	end
+
+	local config = axr_main and axr_main.config
+	if not config then
+		return
+	end
+
+	local faction = config:r_value("character_creation", CONFIG_FRESH_FACTION, 3)
+	if not faction or faction == "" then
+		faction = config:r_value("character_creation", "new_game_faction", 3)
+	end
+
+	if ztc_start_companions_is_supported_faction(faction) then
+		state[STORAGE_FRESH_FACTION] = faction
+	end
+end
+
+local function ztc_start_companions_get_fresh_faction()
+	local state = alife_storage_manager and alife_storage_manager.get_state and alife_storage_manager.get_state()
+	if state and state[STORAGE_FRESH_FACTION] then
+		return state[STORAGE_FRESH_FACTION]
+	end
+	return nil
+end
+
+local function ztc_start_companions_clear_fresh_faction()
+	local state = alife_storage_manager and alife_storage_manager.get_state and alife_storage_manager.get_state()
+	if state then
+		state[STORAGE_FRESH_FACTION] = nil
+	end
+end
+
+local function ztc_start_companions_is_brand_new_save()
+	if game_statistics and game_statistics.actor_statistics then
+		local stat = game_statistics.actor_statistics["level_changes"]
+		if stat and stat.count ~= nil then
+			return stat.count == 0
+		end
+	end
+	if game_statistics and game_statistics.get_statistic_count then
+		return game_statistics.get_statistic_count("level_changes") == 0
+	end
+	return false
+end
+
+local function ztc_start_companions_resolve_faction()
+	local faction = ztc_start_companions_get_fresh_faction()
+	if faction then
+		return faction
+	end
+
+	pcall(ztc_start_companions_capture_fresh_start)
+	faction = ztc_start_companions_get_fresh_faction()
+	if faction then
+		return faction
+	end
+
+	if not ztc_start_companions_is_brand_new_save() or not get_actor_true_community then
+		return nil
+	end
+
+	local com = get_actor_true_community()
+	if not ztc_start_companions_is_supported_faction(com) then
+		return nil
+	end
+
+	local state = alife_storage_manager and alife_storage_manager.get_state and alife_storage_manager.get_state()
+	if state then
+		state[STORAGE_FRESH_FACTION] = com
+	end
+
+	return com
+end
+
+local function ztc_start_companions_find_spawn_pos()
+	local gvid = db.actor:game_vertex_id()
+	local lvid = 4294967295
+	local pos
+
+	repeat
+		local dir = vector_rotate_y(db.actor:direction(), math.random(1, 359))
+		pos = db.actor:position():add(dir:mul(math.random(1, 5)))
+		lvid = level.vertex_id(pos)
+	until pos ~= nil and lvid ~= 4294967295
+
+	return pos, lvid, gvid
+end
+
+local function ztc_start_companions_try_recruit_id(npc_id)
+	if not pending_recruit_ids[npc_id] then
+		return true
+	end
+
+	local npc = level.object_by_id(npc_id)
+	if not npc or not npc:alive() or not db.actor then
+		return false
+	end
+
+	local ok = pcall(function()
+		npc:set_relation(game_object.friend, db.actor)
+		if axr_companions and axr_companions.add_to_actor_squad then
+			axr_companions.add_to_actor_squad(npc)
+		elseif dialogs_axr_companion and dialogs_axr_companion.become_actor_companion then
+			dialogs_axr_companion.become_actor_companion(db.actor, npc)
+		end
+	end)
+
+	if ok then
+		pending_recruit_ids[npc_id] = nil
+		return true
+	end
+
+	return false
+end
+
+local function ztc_start_companions_spawn_survival_squad(section)
+	if not section or not ini_sys:section_exist(section) then
+		return false
+	end
+
+	local pos, lvid, gvid = ztc_start_companions_find_spawn_pos()
+	local spawned = false
+
+	local ok = pcall(function()
+		local squad = alife_create(tostring(section), pos, lvid, gvid)
+		if not squad then
+			return
+		end
+
+		if axr_companions and axr_companions.companion_squads then
+			axr_companions.companion_squads[squad.id] = squad
+		end
+
+		squad:create_npc(nil, pos, lvid, gvid)
+
+		for k in squad:squad_members() do
+			local se_obj = k.object or (k.id and alife_object(k.id))
+			if se_obj and k.id then
+				SIMBOARD:setup_squad_and_group(se_obj)
+				se_save_var(se_obj.id, se_obj:name(), "companion", true)
+				pending_recruit_ids[k.id] = true
+				spawned = true
+			end
+		end
+	end)
+
+	return ok and spawned
+end
+
+local function ztc_start_companions_count_pending()
+	local n = 0
+	for id, waiting in pairs(pending_recruit_ids) do
+		if waiting then
+			n = n + 1
+		end
+	end
+	return n
+end
+
+local function ztc_start_companions_finish_recruit_retries()
+	for id, waiting in pairs(pending_recruit_ids) do
+		if waiting then
+			ztc_start_companions_try_recruit_id(id)
+		end
+	end
+
+	if ztc_start_companions_count_pending() == 0 then
+		ztc_start_companions_notify("st_ztc_start_companions_spawned")
+		save_var(db.actor, SAVE_KEY, true)
+		ztc_start_companions_clear_fresh_faction()
+		return true
+	end
+
+	return false
+end
+
+local function ztc_start_companions_retry_recruits()
+	ztc_start_companions_finish_recruit_retries()
+	if ztc_start_companions_count_pending() > 0 then
+		CreateTimeEvent(EVENT_NAME, "recruit_retry", 2, ztc_start_companions_retry_recruits)
+	end
+	return true
+end
+
+function ztc_start_companions_try_spawn()
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
+		return true
+	end
+
+	if load_var(db.actor, SAVE_KEY) == true then
+		ztc_start_companions_clear_fresh_faction()
+		return true
+	end
+
+	local faction = ztc_start_companions_resolve_faction()
+	if not faction then
+		return true
+	end
+
+	if not ztc_start_companions_mcm_master_enabled() then
+		ztc_start_companions_notify("st_ztc_start_companions_mcm_off")
+		ztc_start_companions_clear_fresh_faction()
+		return true
+	end
+
+	if not ztc_start_companions_faction_toggle_enabled(faction) then
+		ztc_start_companions_clear_fresh_faction()
+		return true
+	end
+
+	if not ztc_start_companions_companions_active() then
+		ztc_start_companions_notify("st_ztc_start_companions_disabled")
+		ztc_start_companions_clear_fresh_faction()
+		return true
+	end
+
+	ztc_start_companions_prepare_companion_api()
+
+	local actor_com = ztc_faction_utils.get_actor_community(db.actor)
+	if not ztc_start_companions_actor_matches_faction(faction, actor_com) then
+		ztc_start_companions_clear_fresh_faction()
+		return true
+	end
+
+	local sections = SQUAD_SECTIONS[faction]
+	if not sections then
+		ztc_start_companions_notify("st_ztc_start_companions_failed")
+		ztc_start_companions_clear_fresh_faction()
+		return true
+	end
+
+	local count = ztc_start_companions_get_count(faction)
+	local spawned_any = false
+
+	for i = 1, count do
+		local section = sections[((i - 1) % #sections) + 1]
+		if ztc_start_companions_spawn_survival_squad(section) then
+			spawned_any = true
+		end
+	end
+
+	if not spawned_any then
+		ztc_start_companions_notify("st_ztc_start_companions_failed")
+		ztc_start_companions_clear_fresh_faction()
+		return true
+	end
+
+	for id, waiting in pairs(pending_recruit_ids) do
+		if waiting then
+			ztc_start_companions_try_recruit_id(id)
+		end
+	end
+
+	if ztc_start_companions_finish_recruit_retries() then
+		return true
+	end
+
+	CreateTimeEvent(EVENT_NAME, "recruit_retry", 2, ztc_start_companions_retry_recruits)
+	return true
+end
+
+function ztc_start_companions_on_npc_net_spawn(npc, se_obj)
+	if not se_obj or not pending_recruit_ids[se_obj.id] then
+		return
+	end
+	ztc_start_companions_try_recruit_id(se_obj.id)
+end
+
+function ztc_start_companions_on_game_load()
+	ztc_start_companions_install_start_hook()
+	pcall(ztc_start_companions_capture_fresh_start)
+end
+
+function ztc_start_companions_actor_on_first_update()
+	ztc_start_companions_install_start_hook()
+	pcall(ztc_start_companions_capture_fresh_start)
+
+	if spawn_scheduled or load_var(db.actor, SAVE_KEY) == true then
+		return
+	end
+
+	local faction = ztc_start_companions_resolve_faction()
+	if not faction then
+		return
+	end
+
+	if not ztc_start_companions_mcm_master_enabled() then
+		ztc_start_companions_notify("st_ztc_start_companions_mcm_off")
+		return
+	end
+
+	if not ztc_start_companions_faction_toggle_enabled(faction) then
+		return
+	end
+
+	spawn_scheduled = true
+	ztc_start_companions_notify("st_ztc_start_companions_pending")
+	CreateTimeEvent(EVENT_NAME, "spawn", 5, ztc_start_companions_try_spawn)
+end
+
+function on_game_start()
+	ztc_start_companions_install_start_hook()
+	RegisterScriptCallback("on_game_load", ztc_start_companions_on_game_load)
+	RegisterScriptCallback("actor_on_first_update", ztc_start_companions_actor_on_first_update)
+	RegisterScriptCallback("npc_on_net_spawn", ztc_start_companions_on_npc_net_spawn)
+end

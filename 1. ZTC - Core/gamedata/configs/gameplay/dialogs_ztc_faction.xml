@@ -21,4 +21,24 @@
 			</phrase>
 		</phrase_list>
 	</dialog>
+	<dialog id="ztc_loners_teamup_request_dialog">
+		<precondition>ztc_faction_loners_teamup_requests.is_enabled</precondition>
+		<precondition>dialogs_axr_companion.is_module_enabled</precondition>
+		<precondition>ztc_faction_loners_teamup_requests.has_npc_requested_teamup</precondition>
+		<precondition>ztc_faction_loners_teamup_requests.is_loner_npc</precondition>
+		<precondition>dialogs_axr_companion.is_non_story</precondition>
+		<precondition>dialogs_axr_companion.is_not_actor_companion</precondition>
+		<precondition>dialogs_axr_companion.is_room_in_actor_squad</precondition>
+		<precondition>dialogs_axr_companion.is_not_hostage_task_giver</precondition>
+		<phrase_list>
+			<phrase id="0">
+				<text>st_ztc_loners_teamup_ask</text>
+				<next>1</next>
+			</phrase>
+			<phrase id="1">
+				<text>st_ztc_loners_teamup_agree</text>
+				<action>ztc_faction_loners_teamup_requests.recruit_companion</action>
+			</phrase>
+		</phrase_list>
+	</dialog>
 </game_dialogs>

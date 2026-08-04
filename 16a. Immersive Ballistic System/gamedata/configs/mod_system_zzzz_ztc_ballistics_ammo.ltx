@@ -1,0 +1,242 @@
+; =============================================================================
+; ZTC Ballistics — ammo tier assignments (ztc_ammo_tier + k_hit only)
+; =============================================================================
+; ztc_ammo_tier values:
+;   soft | ball | enhanced | ap | ap_amr | buckshot
+;
+; Script scales tier -> k_ap at fire time by firing weapon kind
+; (pistol / smg / rifle / sniper / shotgun). Engine vanilla k_ap is ignored.
+; k_hit is unchanged here — damage tier multiplier applied by ballistics script.
+;
+; Only BASE ammo sections are patched here. Condition variants (_bad,
+; _verybad) inherit ztc_ammo_tier / k_hit from their parent via vanilla
+; LTX chain. Vanilla impair and k_bullet_speed penalties on _bad/_verybad
+; are untouched.
+;
+; k_air_resistance is NOT modified — per-caliber drag stays vanilla.
+; Grenades (vog-25, m209, og-7b) and gauss ammo are intentionally excluded.
+; =============================================================================
+
+; --- 9x18 Makarov -----------------------------------------------------------
+
+![ammo_9x18_fmj]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_9x18_pmm]
+ztc_ammo_tier = enhanced
+k_hit = 1.32
+
+![ammo_9x18_ap]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+; --- 9x19 Parabellum --------------------------------------------------------
+
+![ammo_9x19_fmj]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_9x19_pbp]
+ztc_ammo_tier = soft
+k_hit = 1.32
+
+![ammo_9x19_ap]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+; --- 9x21 -------------------------------------------------------------------
+
+![ammo_9x21]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_9x21_sp10]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+; --- 7.62x25 Tokarev --------------------------------------------------------
+
+![ammo_7.62x25_p]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_7.62x25_ps]
+ztc_ammo_tier = enhanced
+k_hit = 1.32
+
+; --- 11.43x23 (.45 ACP) -----------------------------------------------------
+
+![ammo_11.43x23_fmj]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_11.43x23_hydro]
+ztc_ammo_tier = soft
+k_hit = 1.32
+
+; --- 5.7x28 FN --------------------------------------------------------------
+
+![ammo_5.7x28_ss195]
+ztc_ammo_tier = soft
+k_hit = 1.32
+
+![ammo_5.7x28_ss190]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+; --- 4.6x30 HK --------------------------------------------------------------
+
+![ammo_4.6x30_fmj]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+; --- .357 Magnum ------------------------------------------------------------
+
+![ammo_357_hp_mag]
+ztc_ammo_tier = soft
+k_hit = 1.32
+
+; --- 5.45x39 ----------------------------------------------------------------
+
+![ammo_5.45x39_fmj]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_5.45x39_ep]
+ztc_ammo_tier = enhanced
+k_hit = 1.32
+
+![ammo_5.45x39_ap]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+; --- 5.56x45 ----------------------------------------------------------------
+
+![ammo_5.56x45_fmj]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_5.56x45_ss190]
+ztc_ammo_tier = enhanced
+k_hit = 1.32
+
+![ammo_5.56x45_ap]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+; --- 7.62x39 ----------------------------------------------------------------
+
+![ammo_7.62x39_fmj]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_7.62x39_ap]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+; --- 7.92x33 (8mm Kurz) -----------------------------------------------------
+
+![ammo_7.92x33_fmj]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_7.92x33_ap]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+; --- 7.62x51 NATO -----------------------------------------------------------
+
+![ammo_7.62x51_fmj]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_7.62x51_ap]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+; --- 7.62x54R ---------------------------------------------------------------
+
+![ammo_7.62x54_7h1]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_7.62x54_7h14]
+ztc_ammo_tier = enhanced
+k_hit = 1.32
+
+![ammo_7.62x54_ap]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+![ammo_pkm_100]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+; --- 9x39 -------------------------------------------------------------------
+
+![ammo_9x39_pab9]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_9x39_ap]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+; --- 12.7x55 ----------------------------------------------------------------
+
+![ammo_12.7x55_fmj]
+ztc_ammo_tier = ball
+k_hit = 1.00
+
+![ammo_12.7x55_ap]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+; --- 12 gauge ---------------------------------------------------------------
+; Slug/sabot k_hit restored to vanilla (single projectile). Buck keeps low per-pellet k_hit.
+
+![ammo_12x70_buck]
+ztc_ammo_tier = buckshot
+k_hit = 0.40
+
+![ammo_12x76_zhekan]
+ztc_ammo_tier = enhanced
+k_hit = 1.32
+
+![ammo_12x76_bull]
+ztc_ammo_tier = ap
+k_hit = 2.50
+
+![ammo_12x76_dart]
+ztc_ammo_tier = ap
+k_hit = 1.75
+
+![ammo_20x70_buck]
+ztc_ammo_tier = buckshot
+k_hit = 0.40
+
+; --- 23x75 ------------------------------------------------------------------
+
+![ammo_23x75_barrikada]
+ztc_ammo_tier = enhanced
+k_hit = 1.32
+
+![ammo_23x75_shrapnel]
+ztc_ammo_tier = buckshot
+k_hit = 0.40
+
+; --- Magnum / sniper --------------------------------------------------------
+; Single load per caliber — tiered by real-world role (no separate AP items).
+
+![ammo_magnum_300]
+ztc_ammo_tier = enhanced
+k_hit = 1.32
+
+![ammo_338_federal]
+ztc_ammo_tier = ap
+k_hit = 1.65
+
+![ammo_50_bmg]
+ztc_ammo_tier = ap_amr
+k_hit = 1.85

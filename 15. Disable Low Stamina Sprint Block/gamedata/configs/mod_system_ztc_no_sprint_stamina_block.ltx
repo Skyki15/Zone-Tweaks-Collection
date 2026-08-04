@@ -1,0 +1,9 @@
+; Zone Tweaks Collection — disable engine stamina gates that block sprint.
+; cant_sprint_*: IsCantSprint() never trips (power is always >= 0).
+; limping_power_*: low stamina no longer triggers limping, which also blocks sprint via CanAccelerate().
+
+![actor_condition]
+cant_sprint_power_begin = 0
+cant_sprint_power_end   = 0
+limping_power_begin     = 0
+limping_power_end       = 0

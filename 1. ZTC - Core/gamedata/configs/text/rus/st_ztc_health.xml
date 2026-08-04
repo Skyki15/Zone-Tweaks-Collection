@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="windows-1251" standalone="yes" ?>
+<string_table>
+	<string id="ui_mcm_menu_ztc">
+		<text>Твики Зоны</text>
+	</string>
+
+	<string id="ui_mcm_menu_health_tweaks">
+		<text>Твики здоровья</text>
+	</string>
+
+	<string id="ui_mcm_menu_settings">
+		<text>Общее</text>
+	</string>
+
+	<string id="ui_mcm_menu_stalker">
+		<text>Сталкер</text>
+	</string>
+
+	<string id="ui_mcm_menu_mutants">
+		<text>Мутанты</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_title">
+		<text>Твики здоровья</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_stalker_title">
+		<text>Здоровье сталкеров</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_mutants_title">
+		<text>Здоровье мутантов</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_enabled">
+		<text>Включить масштабирование здоровья</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_exclude_story_npcs">
+		<text>Исключить сюжетных NPC</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_exclude_companions">
+		<text>Исключить напарников</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_exclude_traders">
+		<text>Исключить торговцев</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_reapply_on_change">
+		<text>Переприменять к живым существам при изменении настроек</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_stalkers_desc">
+		<text>Множитель здоровья сталкеров по рангу (0,25x-3,0x). Масштабирует макс. здоровье при спавне: значения выше 1,0 увеличивают ОЗ; ниже 1,0 - уменьшают.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_mutants_desc">
+		<text>Множитель здоровья мутантов по виду (0,25x-3,0x). Масштабирует макс. здоровье при спавне: значения выше 1,0 увеличивают ОЗ; ниже 1,0 - уменьшают.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_rank_novice">
+		<text>новичок</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_rank_trainee">
+		<text>начинающий</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_rank_experienced">
+		<text>опытный</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_rank_professional">
+		<text>профи</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_rank_veteran">
+		<text>ветеран</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_rank_expert">
+		<text>эксперт</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_rank_master">
+		<text>мастер</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_rank_legend">
+		<text>легенда</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_factions_desc">
+		<text>Множитель здоровья по фракции (0,25x–3,0x). Накладывается на множитель по рангу выше. Масштабирует макс. здоровье при спавне: значения выше 1,0 увеличивают ОЗ; ниже 1,0 — уменьшают.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_stalker">
+		<text>Одиночки</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_bandit">
+		<text>Бандиты</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_csky">
+		<text>Чистое небо</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_dolg">
+		<text>Долг</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_freedom">
+		<text>Свобода</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_killer">
+		<text>Наёмники</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_army">
+		<text>Военные</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_ecolog">
+		<text>Учёные</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_monolith">
+		<text>Монолит</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_renegade">
+		<text>Ренегаты</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_greh">
+		<text>Грех</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_isg">
+		<text>ИИГ</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_zombied">
+		<text>Зомбированные сталкеры</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_dog">
+		<text>Слепой пёс</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_flesh">
+		<text>Плоть</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_bloodsucker">
+		<text>Кровосос</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_boar">
+		<text>Кабан</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_burer">
+		<text>Бюрер</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_cat">
+		<text>Кошка</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_controller">
+		<text>Контролёр</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_fracture">
+		<text>Излом</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_karlik">
+		<text>Карлик</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_pseudodog">
+		<text>Псевдособака</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_pseudo_gigant">
+		<text>Псевдогигант</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_snork">
+		<text>Снорк</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_tushkano">
+		<text>Тушкан</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_zombie">
+		<text>Зомби</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_lurker">
+		<text>Люркер</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_psysucker">
+		<text>Псисос</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_chimera">
+		<text>Химера</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_poltergeist">
+		<text>Полтергейст</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_species_rat">
+		<text>Крыса / Родент</text>
+	</string>
+
+</string_table>

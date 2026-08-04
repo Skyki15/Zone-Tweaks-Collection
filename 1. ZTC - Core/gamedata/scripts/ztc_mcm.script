@@ -43,6 +43,11 @@ function mcm.get_config(key)
 		return data.get_rank_default(rank)
 	end
 
+	local faction = key:match("^faction_(.+)$")
+	if faction then
+		return data.get_faction_default(faction)
+	end
+
 	local species = key:match("^species_(.+)$")
 	if species then
 		return data.get_species_default(species)
@@ -111,6 +116,23 @@ local function build_stalker_menu()
 			"rank_" .. rank,
 			"ztc_health_rank_" .. rank,
 			data.get_rank_default(rank)
+		)
+	end
+
+	gr[#gr + 1] = { id = "divider_factions", type = "line" }
+	gr[#gr + 1] = {
+		id = "factions_desc",
+		type = "desc",
+		text = "ui_mcm_ztc_health_factions_desc",
+		clr = {255, 200, 200, 200},
+	}
+
+	for i = 1, #data.STALKER_FACTIONS do
+		local faction = data.STALKER_FACTIONS[i]
+		gr[#gr + 1] = mult_track(
+			"faction_" .. faction,
+			"ztc_health_faction_" .. faction,
+			data.get_faction_default(faction)
 		)
 	end
 
@@ -225,6 +247,13 @@ local function build_general_menu()
 				hint = "ztc_general_exclude_monolith",
 			},
 			{
+				id = "exclude_companions",
+				type = "check",
+				val = 1,
+				def = true,
+				hint = "ztc_general_exclude_companions",
+			},
+			{
 				id = "wounded_compat_desc",
 				type = "desc",
 				text = "ui_mcm_ztc_general_wounded_compat_desc",
@@ -237,27 +266,6 @@ local function build_general_menu()
 				val = 1,
 				def = false,
 				hint = "ztc_general_disable_weapon_warnings",
-			},
-			{ id = "divider_fleeing", type = "line" },
-			{
-				id = "disable_npc_fleeing",
-				type = "check",
-				val = 1,
-				def = false,
-				hint = "ztc_general_disable_npc_fleeing",
-			},
-			{
-				id = "disable_companion_fleeing",
-				type = "check",
-				val = 1,
-				def = false,
-				hint = "ztc_general_disable_companion_fleeing",
-			},
-			{
-				id = "fleeing_compat_desc",
-				type = "desc",
-				text = "ui_mcm_ztc_general_fleeing_compat_desc",
-				clr = {255, 150, 150, 150},
 			},
 		},
 	}
@@ -314,6 +322,20 @@ local function build_damage_settings_menu()
 				text = "ui_mcm_ztc_damage_info_desc",
 				clr = {255, 200, 200, 200},
 			},
+			{ id = "divider_ballistics", type = "line" },
+			{
+				id = "ballistics_enabled",
+				type = "check",
+				val = 1,
+				def = true,
+				hint = "ztc_damage_ballistics_enabled",
+			},
+			{
+				id = "ballistics_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_damage_ballistics_desc",
+				clr = {255, 200, 200, 200},
+			},
 		},
 	}
 end
@@ -368,6 +390,7 @@ function on_mcm_load()
 		id = "ztc",
 		gr = {
 			build_general_menu(),
+			ztc_player_mcm.build_player_tweaks_menu(),
 			build_health_tweaks_menu(),
 			build_damage_tweaks_menu(),
 			ztc_faction_mcm.build_faction_tweaks_menu(),

@@ -1,0 +1,75 @@
+-- Zone Tweaks Collection — Player Tweaks MCM
+
+_G.ztc_player_mcm = _G.ztc_player_mcm or {}
+local mcm = _G.ztc_player_mcm
+
+local MCM_ROOT = "ztc/player_tweaks/"
+local SUB_STAMINA = "stamina/"
+
+local defaults = {
+	stamina_thirst_multiplier = 0,
+}
+
+function mcm.get_config(key)
+	if ui_mcm then
+		local paths = {
+			MCM_ROOT .. SUB_STAMINA .. key,
+			MCM_ROOT .. key,
+		}
+		for i = 1, #paths do
+			local val = ui_mcm.get(paths[i])
+			if val ~= nil then
+				return val
+			end
+		end
+	end
+
+	if defaults[key] ~= nil then
+		return defaults[key]
+	end
+
+	return nil
+end
+
+function mcm.build_stamina_menu()
+	return {
+		id = "stamina",
+		sh = true,
+		gr = {
+			{
+				id = "title",
+				type = "slide",
+				link = "ui_options_slider_disguise",
+				text = "ui_mcm_ztc_player_stamina_title",
+				size = {512, 50},
+				spacing = 20,
+			},
+			{
+				id = "stamina_thirst_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_player_stamina_thirst_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{ id = "divider_main", type = "line" },
+			{
+				id = "stamina_thirst_multiplier",
+				type = "track",
+				val = 2,
+				min = 0,
+				max = 5,
+				step = 0.1,
+				def = defaults.stamina_thirst_multiplier,
+				hint = "ztc_player_stamina_thirst_multiplier",
+			},
+		},
+	}
+end
+
+function mcm.build_player_tweaks_menu()
+	return {
+		id = "player_tweaks",
+		gr = {
+			mcm.build_stamina_menu(),
+		},
+	}
+end

@@ -39,9 +39,16 @@ local next_restore_check_ts = 0
 local transition_restore_mode = false
 local last_tame_try_ts = {}
 local TAME_TRY_DEBOUNCE_MS = 750
+local first_update_scan_pending = false
 
 local function is_alive_obj(obj)
-	return obj and obj.alive and obj:alive()
+	if not obj then
+		return false
+	end
+	local ok, alive = pcall(function()
+		return obj:alive()
+	end)
+	return ok and alive == true
 end
 
 local function get_companion_teleport_dist()
@@ -595,6 +602,10 @@ function ztc_faction_taming_monster_on_net_spawn(obj)
 		end
 	end
 
+	if ztc_faction_utils.sim_skip_net_spawn_hooks() and not is_tamed(obj) then
+		return
+	end
+
 	apply_taming_interaction_state(obj)
 end
 
@@ -626,13 +637,17 @@ function ztc_faction_taming_monster_on_update(obj)
 		return
 	end
 
+	if ztc_faction_utils.sim_skip_heavy_work() then
+		return
+	end
+
 	local now = time_global()
 	local next_tick = next_follow_tick[id] or 0
 	if now < next_tick then
 		return
 	end
 
-	next_follow_tick[id] = now + FOLLOW_CHECK_MS
+	next_follow_tick[id] = now + ztc_faction_utils.sim_interval_ms(FOLLOW_CHECK_MS)
 	maintain_companion_position(obj)
 end
 
@@ -812,30 +827,56 @@ function ztc_faction_taming_on_level_changing()
 	next_restore_check_ts = 0
 end
 
-function ztc_faction_taming_actor_on_first_update()
+local function ztc_faction_taming_run_first_update_scan()
 	if not ztc_faction_utils.actor_is_valid() or not level.iterate_nearest then
 		return
 	end
 
-	restore_companions_after_transition(time_global())
-
 	level.iterate_nearest(db.actor:position(), FIRST_UPDATE_SCAN_RADIUS, function(lobj)
+		if not IsMonster(lobj) then
+			return
+		end
 		if is_alive_obj(lobj) and is_tamable_section(lobj:section()) then
 			apply_taming_interaction_state(lobj)
 		end
 	end)
 end
 
+function ztc_faction_taming_actor_on_first_update()
+	if not ztc_faction_utils.actor_is_valid() then
+		return
+	end
+
+	if ztc_faction_utils.sim_skip_heavy_work() then
+		first_update_scan_pending = true
+		return
+	end
+
+	restore_companions_after_transition(time_global())
+	first_update_scan_pending = false
+	ztc_faction_taming_run_first_update_scan()
+end
+
 function ztc_faction_taming_actor_on_update()
+	local now = time_global()
+
+	if first_update_scan_pending and not ztc_faction_utils.sim_skip_heavy_work() then
+		first_update_scan_pending = false
+		ztc_faction_taming_run_first_update_scan()
+	end
+
 	if count_templates_total() == 0 then
 		return
 	end
 
-	local now = time_global()
 	if now < next_restore_check_ts then
 		return
 	end
-	next_restore_check_ts = now + RESTORE_CHECK_MS
+	next_restore_check_ts = now + ztc_faction_utils.sim_interval_ms(RESTORE_CHECK_MS)
+
+	if ztc_faction_utils.sim_skip_heavy_work() then
+		return
+	end
 
 	restore_companions_after_transition(now)
 end

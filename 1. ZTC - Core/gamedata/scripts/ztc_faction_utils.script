@@ -13,11 +13,51 @@ utils.MONOLITH_COMMUNITIES = {
 	actor_monolith = true
 }
 
-function utils.actor_is_valid()
-	if not db or not db.actor or not db.actor.alive or not db.actor:alive() then
+-- Scale Sin sim hooks when time_factor is boosted (debug fast-forward, etc.).
+local SIM_INTERVAL_SCALE_START = 2.0
+local SIM_INTERVAL_SCALE_CAP = 80.0
+local SIM_SKIP_NET_SPAWN_FACTOR = 40.0
+local SIM_SKIP_HEAVY_FACTOR = 100.0
+
+function utils.get_sim_time_factor()
+	if level and level.get_time_factor then
+		local ok, tf = pcall(level.get_time_factor)
+		if ok and type(tf) == "number" and tf > 0 then
+			return tf
+		end
+	end
+	return 1.0
+end
+
+function utils.sim_interval_ms(base_ms)
+	local tf = utils.get_sim_time_factor()
+	if tf <= SIM_INTERVAL_SCALE_START then
+		return base_ms
+	end
+	local scale = math.min(tf, SIM_INTERVAL_SCALE_CAP)
+	return math.floor(base_ms * scale)
+end
+
+function utils.sim_skip_net_spawn_hooks()
+	return utils.get_sim_time_factor() >= SIM_SKIP_NET_SPAWN_FACTOR
+end
+
+function utils.sim_skip_heavy_work()
+	return utils.get_sim_time_factor() >= SIM_SKIP_HEAVY_FACTOR
+end
+
+function utils.obj_is_alive(obj)
+	if not obj then
 		return false
 	end
-	return true
+	local ok, alive = pcall(function()
+		return obj.alive and obj:alive()
+	end)
+	return ok and alive == true
+end
+
+function utils.actor_is_valid()
+	return utils.obj_is_alive(db and db.actor)
 end
 
 function utils.get_actor_community(obj)

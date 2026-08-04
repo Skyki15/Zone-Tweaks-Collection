@@ -27,7 +27,13 @@ local squad_wipe_pending = {}
 local next_wipe_check_ts = 0
 
 local function is_alive_obj(obj)
-	return obj and obj.alive and obj:alive()
+	if not obj then
+		return false
+	end
+	local ok, alive = pcall(function()
+		return obj:alive()
+	end)
+	return ok and alive == true
 end
 
 local function ztc_faction_escort_get_config(key, fallback)
@@ -384,6 +390,10 @@ function ztc_faction_escort_try_spawn_for_squad(squad)
 		return
 	end
 
+	if ztc_faction_utils.sim_skip_net_spawn_hooks() then
+		return
+	end
+
 	local squad_id = squad.id
 	if spawn_attempted[squad_id] then
 		return
@@ -458,11 +468,22 @@ local function ztc_faction_escort_release_squad_escorts(squad_id)
 	squad_wipe_pending[squad_id] = nil
 end
 
+local function ztc_faction_escort_release_all()
+	for squad_id in pairs(escort_roster) do
+		ztc_faction_escort_release_squad_escorts(squad_id)
+	end
+	escort_registry = {}
+	escort_roster = {}
+	spawn_attempted = {}
+	squad_wipe_pending = {}
+	next_follow_tick = {}
+end
+
 local function ztc_faction_escort_check_squad_wipes(now)
 	if now < next_wipe_check_ts then
 		return
 	end
-	next_wipe_check_ts = now + WIPE_CHECK_MS
+	next_wipe_check_ts = now + ztc_faction_utils.sim_interval_ms(WIPE_CHECK_MS)
 
 	for squad_id in pairs(escort_roster) do
 		local squad = alife_object(squad_id)
@@ -524,6 +545,9 @@ function ztc_faction_escort_monster_on_net_destroy(obj)
 end
 
 function ztc_faction_escort_monster_on_update(obj)
+	if not ztc_faction_escort_enabled() then
+		return
+	end
 	if not is_alive_obj(obj) then
 		return
 	end
@@ -550,17 +574,24 @@ function ztc_faction_escort_monster_on_update(obj)
 		return
 	end
 
+	if ztc_faction_utils.sim_skip_heavy_work() then
+		return
+	end
+
 	local now = time_global()
 	local next_tick = next_follow_tick[id] or 0
 	if now < next_tick then
 		return
 	end
 
-	next_follow_tick[id] = now + FOLLOW_CHECK_MS
+	next_follow_tick[id] = now + ztc_faction_utils.sim_interval_ms(FOLLOW_CHECK_MS)
 	ztc_faction_escort_maintain_position(obj, commander_id)
 end
 
 function ztc_faction_escort_on_enemy_eval(npc, enemy, flags)
+	if not ztc_faction_escort_enabled() then
+		return
+	end
 	if not npc or not enemy or not flags then
 		return
 	end
@@ -640,6 +671,13 @@ end
 
 function ztc_faction_escort_actor_on_update()
 	if not ztc_faction_escort_enabled() then
+		if next(escort_registry) or next(escort_roster) then
+			ztc_faction_escort_release_all()
+		end
+		return
+	end
+
+	if ztc_faction_utils.sim_skip_heavy_work() then
 		return
 	end
 

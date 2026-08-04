@@ -7,7 +7,10 @@ local SAVE_KEY_GRANTED = "ztc_faction_force_shield_actor_granted"
 local SAVE_KEY_CHARGE = "ztc_faction_force_shield_actor_charge"
 local SAVE_KEY_BROKEN = "ztc_faction_force_shield_actor_broken"
 local EQUIP_DELAY_SEC = 0.5
+local RETURN_ITEM_DELAY_SEC = 0.15
 local HIT_VFX_DEBOUNCE_MS = 150
+local HIT_RECOVER_DELAY_SEC = 0.05
+local MAX_CHARGE_UPDATE_DELTA_SEC = 2.0
 local CHARGE_RECHARGE_NORMAL_SEC_DEFAULT = 5 -- seconds per 1% charge
 local CHARGE_RECHARGE_BROKEN_SEC_DEFAULT = 2 -- seconds per 1% charge
 local CHARGE_DRAIN_BY_KIND = {
@@ -18,6 +21,7 @@ local CHARGE_DRAIN_BY_KIND = {
 }
 local CHARGE_DRAIN_SHOTGUN_PELLET = 0.10
 local CHARGE_DRAIN_SHOTGUN_SLUG = 0.70
+local ITEM_CONDITION_FLOOR = 0.05 -- engine/utils_item.degrade destroys items at condition 0
 
 local npc_equip_pending = {}
 local last_hit_vfx_ts = {}
@@ -34,16 +38,58 @@ local last_inv_ui_refresh_ts = 0
 local last_info_tip_pct = -1
 local last_info_tip_id = nil
 local INV_UI_REFRESH_MS = 200
+local inv_ui_refresh_guard = false
 local CONDITION_SYNC_MS = 500
+local HIT_VFX_SKIP_TF = 10.0
+local hit_recover_pending = false
+local ztc_faction_force_shield_schedule_hit_recovery
+local artifact_transition_grace_ts = 0
+local ARTIFACT_TRANSITION_GRACE_MS = 1500
+
+-- Forward declarations (TimeEvent closures above these implementations must bind locals, not globals)
+local ztc_faction_force_shield_actor_has_artifact
+local ztc_faction_force_shield_try_grant_actor
+local ztc_faction_force_shield_preserve_cicatrix_items
+
+local function ztc_faction_force_shield_get_sim_time_factor()
+	if ztc_faction_utils and ztc_faction_utils.get_sim_time_factor then
+		return ztc_faction_utils.get_sim_time_factor()
+	end
+	return 1.0
+end
+
+local function ztc_faction_force_shield_obj_is_alive(obj)
+	if not obj then
+		return false
+	end
+
+	local ok, alive = pcall(function()
+		return obj.alive and obj:alive()
+	end)
+	return ok and alive == true
+end
+
+local function ztc_faction_force_shield_sim_skip_heavy()
+	return ztc_faction_utils
+		and ztc_faction_utils.sim_skip_heavy_work
+		and ztc_faction_utils.sim_skip_heavy_work()
+end
+
+local function ztc_faction_force_shield_sim_interval_ms(base_ms)
+	if ztc_faction_utils and ztc_faction_utils.sim_interval_ms then
+		return ztc_faction_utils.sim_interval_ms(base_ms)
+	end
+	return base_ms
+end
 
 local PARTICLE_SPARKS = "ztc_faction_greh_shield\\greh_shield_sparks"
 local PARTICLE_DISTORT = "ztc_faction_greh_shield\\greh_shield_distort"
 local PARTICLE_SHIMMER = "ztc_faction_greh_shield\\greh_shield_shimmer"
 local BROKEN_SHIELD_SOUNDS = {
-	"mast_sounds\\broken_shield1",
-	"mast_sounds\\broken_shield2",
-	"mast_sounds\\broken_shield3",
-	"mast_sounds\\broken_shield4",
+	"cicatrix_sounds\\broken_shield1",
+	"cicatrix_sounds\\broken_shield2",
+	"cicatrix_sounds\\broken_shield3",
+	"cicatrix_sounds\\broken_shield4",
 }
 
 local function ztc_faction_force_shield_cfg(key, fallback)
@@ -77,6 +123,16 @@ local function ztc_faction_force_shield_npc_enabled()
 	return ztc_faction_force_shield_cfg("force_shield_npc_enabled", false) == true
 end
 
+local function ztc_faction_force_shield_actor_hooks_wanted()
+	if not ztc_faction_force_shield_actor_enabled() then
+		return false
+	end
+	if ztc_faction_utils and ztc_faction_utils.actor_is_sin and ztc_faction_utils.actor_is_sin() then
+		return true
+	end
+	return false
+end
+
 local function ztc_faction_force_shield_get_recharge_rate_per_sec(mcm_key, default_sec)
 	local sec = tonumber(ztc_faction_force_shield_cfg(mcm_key, default_sec)) or default_sec
 	if sec < 1 then
@@ -102,6 +158,13 @@ local function ztc_faction_force_shield_get_reduction_percent(mcm_key, legacy_fa
 	end
 	if pct < 0 then
 		pct = 0
+	end
+	if mcm_key == "force_shield_player_bullet_reduction" then
+		if pct < 10 then
+			pct = 10
+		elseif pct > 50 then
+			pct = 50
+		end
 	elseif pct > 90 then
 		pct = 90
 	end
@@ -186,6 +249,26 @@ local function ztc_faction_force_shield_obj_has_on_belt(obj)
 	return found
 end
 
+local function ztc_faction_force_shield_obj_has_in_inventory(obj)
+	if not obj then
+		return false
+	end
+
+	local found = false
+	pcall(function()
+		obj:iterate_inventory(function(_, item)
+			if ztc_faction_force_shield_is_artifact(item) then
+				found = true
+			end
+		end, obj)
+	end)
+	return found
+end
+
+local function ztc_faction_force_shield_obj_has_artifact(obj)
+	return ztc_faction_force_shield_obj_has_on_belt(obj) or ztc_faction_force_shield_obj_has_in_inventory(obj)
+end
+
 local function ztc_faction_force_shield_actor_has_on_belt()
 	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
 		return false
@@ -251,11 +334,44 @@ local function ztc_faction_force_shield_sync_item_condition(obj)
 	end
 
 	pcall(function()
-		obj:set_condition(actor_shield_charge)
+		local cond = actor_shield_charge
+		if ztc_faction_force_shield_is_broken() or cond < ITEM_CONDITION_FLOOR then
+			cond = ITEM_CONDITION_FLOOR
+		end
+		obj:set_condition(cond)
+	end)
+end
+
+local function ztc_faction_force_shield_sync_cicatrix_items(force)
+	if not force and ztc_faction_force_shield_sim_skip_heavy() then
+		return
+	end
+
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
+		return
+	end
+
+	pcall(function()
+		db.actor:iterate_inventory(function(_, item)
+			if ztc_faction_force_shield_is_artifact(item) then
+				ztc_faction_force_shield_sync_item_condition(item)
+			end
+		end, db.actor)
+	end)
+	pcall(function()
+		db.actor:iterate_belt(function(_, item)
+			if ztc_faction_force_shield_is_artifact(item) then
+				ztc_faction_force_shield_sync_item_condition(item)
+			end
+		end, db.actor)
 	end)
 end
 
 local function ztc_faction_force_shield_sync_actor_items()
+	if ztc_faction_force_shield_sim_skip_heavy() then
+		return
+	end
+
 	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
 		return
 	end
@@ -379,18 +495,80 @@ local function ztc_faction_force_shield_try_refresh_cell(ci)
 	return nil
 end
 
+local function ztc_faction_force_shield_inventory_ui_open()
+	if actor_menu and actor_menu.inventory_opened then
+		return actor_menu.inventory_opened()
+	end
+	return false
+end
+
+local function ztc_faction_force_shield_refresh_open_inventory_ui()
+	if not ztc_faction_force_shield_inventory_ui_open() then
+		return
+	end
+	if not ui_inventory or not ui_inventory.inventory then
+		return
+	end
+
+	pcall(function()
+		ztc_faction_force_shield_refresh_inventory_cells(ui_inventory.inventory)
+	end)
+end
+
+local function ztc_faction_force_shield_schedule_post_inventory_work()
+	if not ztc_faction_force_shield_actor_hooks_wanted() then
+		return
+	end
+
+	CreateTimeEvent("ztc_faction_fs_inv_close", "go", 0.1, function()
+		if ztc_faction_force_shield_inventory_ui_open() then
+			return false
+		end
+		if ztc_faction_force_shield_actor_enabled()
+			and ztc_faction_utils
+			and ztc_faction_utils.actor_is_sin
+			and ztc_faction_utils.actor_is_sin() then
+			if not ztc_faction_force_shield_actor_has_artifact() then
+				ztc_faction_force_shield_try_grant_actor()
+			end
+			ztc_faction_force_shield_preserve_cicatrix_items()
+			ztc_faction_force_shield_try_install_actor_hooks()
+		end
+		return true
+	end)
+end
+
+function ztc_faction_force_shield_on_actor_menu_mode(mode, last_mode)
+	if mode == 1 and ztc_faction_force_shield_actor_hooks_wanted() then
+		CreateTimeEvent("ztc_faction_fs_inv_open", "go", 0.05, function()
+			ztc_faction_force_shield_refresh_open_inventory_ui()
+			return true
+		end)
+	end
+	if mode == 0 and (last_mode == 1 or last_mode == 2 or last_mode == 4) then
+		ztc_faction_force_shield_schedule_post_inventory_work()
+	end
+end
+
 local function ztc_faction_force_shield_refresh_inventory_cells(inventory)
+	if inv_ui_refresh_guard then
+		return
+	end
+
 	if not inventory or not inventory.CC then
 		return
 	end
 
+	inv_ui_refresh_guard = true
+
 	local now = time_global()
 	if (now - last_inv_ui_refresh_ts) < INV_UI_REFRESH_MS then
+		inv_ui_refresh_guard = false
 		return
 	end
 	last_inv_ui_refresh_ts = now
 
-	ztc_faction_force_shield_sync_actor_items()
+	ztc_faction_force_shield_sync_cicatrix_items()
 
 	local bags = {"actor_belt", "actor_bag", "actor_quick", "actor_equ"}
 	local refreshed_obj = nil
@@ -407,23 +585,7 @@ local function ztc_faction_force_shield_refresh_inventory_cells(inventory)
 		end
 	end
 
-	if refreshed_obj and inventory.item_info and inventory.item_info.Update and inventory.item_info.IsShown then
-		local info = inventory.item_info
-		if info:IsShown() and info.id == refreshed_obj:id() then
-			local charge_pct = ztc_faction_force_shield_get_charge_percent()
-			if charge_pct ~= last_info_tip_pct or refreshed_obj:id() ~= last_info_tip_id then
-				last_info_tip_pct = charge_pct
-				last_info_tip_id = refreshed_obj:id()
-				pcall(function()
-					ztc_faction_force_shield_refresh_info_tooltip(info, refreshed_obj)
-					if sync_cursor then
-						sync_cursor(info.dialog, info.frame, 0, 0)
-					end
-					info:Show(true)
-				end)
-			end
-		end
-	end
+	inv_ui_refresh_guard = false
 end
 
 local function ztc_faction_force_shield_install_cell_hook()
@@ -469,25 +631,14 @@ local function ztc_faction_force_shield_install_info_hook()
 	ztc_faction_force_shield._info_update_orig = utils_ui.UIInfoItem.Update
 
 	function utils_ui.UIInfoItem:Update(obj, sec, flags)
-		if obj and obj:section() == ARTIFACT_SECTION and self.id and obj:id() == self.id and self:IsShown() then
-			local charge_pct = ztc_faction_force_shield_get_charge_percent()
-			if charge_pct ~= last_info_tip_pct or obj:id() ~= last_info_tip_id then
-				last_info_tip_pct = charge_pct
-				last_info_tip_id = obj:id()
-				ztc_faction_force_shield_refresh_info_tooltip(self, obj)
-				if sync_cursor then
-					sync_cursor(self.dialog, self.frame, 0, 0)
-				end
-				self:Show(true)
-				return
+		if obj and ztc_faction_force_shield_is_artifact(obj) then
+			ztc_faction_force_shield_sync_item_condition(obj)
+		elseif sec == ARTIFACT_SECTION and self.id then
+			local item = level.object_by_id(self.id)
+			if ztc_faction_force_shield_is_artifact(item) then
+				ztc_faction_force_shield_sync_item_condition(item)
+				obj = item
 			end
-			self:Show(true)
-			return
-		end
-
-		if not obj or not sec or sec ~= ARTIFACT_SECTION then
-			last_info_tip_pct = -1
-			last_info_tip_id = nil
 		end
 
 		return ztc_faction_force_shield._info_update_orig(self, obj, sec, flags)
@@ -495,29 +646,153 @@ local function ztc_faction_force_shield_install_info_hook()
 end
 
 local function ztc_faction_force_shield_install_inventory_hook()
-	if not ui_inventory or not ui_inventory.UIInventory then
+	-- Intentionally no UIInventory.Update / UpdateInfo hooks — they ran every frame and
+	-- could freeze inventory (especially after mid-save MCM toggle). Cell + desc hooks suffice.
+end
+
+local function ztc_faction_force_shield_mark_artifact_transition()
+	artifact_transition_grace_ts = time_global() + ARTIFACT_TRANSITION_GRACE_MS
+end
+
+local function ztc_faction_force_shield_artifact_transition_active()
+	return time_global() < artifact_transition_grace_ts
+end
+
+local function ztc_faction_force_shield_actor_has_artifact_safe()
+	if ztc_faction_utils and ztc_faction_utils.actor_is_valid and ztc_faction_utils.actor_is_valid() then
+		local found = false
+		pcall(function()
+			db.actor:iterate_inventory(function(_, item)
+				if ztc_faction_force_shield_is_artifact(item) then
+					found = true
+				end
+			end, db.actor)
+		end)
+		if found or ztc_faction_force_shield_actor_has_on_belt() then
+			return true
+		end
+	end
+
+	if actor_shield_granted and ztc_faction_force_shield_artifact_transition_active() then
+		return true
+	end
+	return false
+end
+
+local function ztc_faction_force_shield_release_vanilla_arty_hit_guard()
+	if not ztc_faction_force_shield._vanilla_arty_hit_guard_installed then
 		return
 	end
 
-	if not ztc_faction_force_shield._inv_hooked and ui_inventory.UIInventory.Update then
-		ztc_faction_force_shield._inv_hooked = true
-		ztc_faction_force_shield._inventory_update_orig = ui_inventory.UIInventory.Update
+	local orig = ztc_faction_force_shield._vanilla_arty_hit_orig
+	local wrapped = ztc_faction_force_shield._vanilla_arty_hit_wrapped
 
-		function ui_inventory.UIInventory:Update(...)
-			ztc_faction_force_shield._inventory_update_orig(self, ...)
-			ztc_faction_force_shield_refresh_inventory_cells(self)
+	if orig then
+		_G.actor_on_before_hit = orig
+		pcall(function()
+			if wrapped then
+				UnregisterScriptCallback("actor_on_before_hit", wrapped)
+			end
+			RegisterScriptCallback("actor_on_before_hit", orig)
+		end)
+	end
+
+	ztc_faction_force_shield._vanilla_arty_hit_guard_installed = false
+	ztc_faction_force_shield._vanilla_arty_hit_wrapped = nil
+	ztc_faction_force_shield._vanilla_arty_hit_orig = nil
+end
+
+local function ztc_faction_force_shield_release_actor_hooks()
+	if ztc_faction_force_shield._degrade_orig and utils_item then
+		utils_item.degrade = ztc_faction_force_shield._degrade_orig
+		ztc_faction_force_shield._degrade_orig = nil
+	end
+
+	ztc_faction_force_shield_release_vanilla_arty_hit_guard()
+	ztc_faction_force_shield._protect_hooked = false
+end
+
+local function ztc_faction_force_shield_install_vanilla_arty_hit_guard()
+	if ztc_faction_force_shield._vanilla_arty_hit_guard_installed then
+		return
+	end
+
+	local orig = _G.actor_on_before_hit
+	if not orig or orig == ztc_faction_force_shield._vanilla_arty_hit_wrapped then
+		return
+	end
+
+	ztc_faction_force_shield._vanilla_arty_hit_orig = orig
+
+	local function wrapped_actor_on_before_hit(s_hit)
+		if not s_hit or s_hit.power <= 0 then
+			return
+		end
+
+		local cicatrix_present = false
+		local other_belt_artefacts = false
+
+		if db and db.actor then
+			pcall(function()
+				db.actor:iterate_belt(function(_, item)
+					if ztc_faction_force_shield_is_artifact(item) then
+						cicatrix_present = true
+						ztc_faction_force_shield_sync_item_condition(item)
+					elseif IsArtefact and IsArtefact(item) then
+						other_belt_artefacts = true
+					end
+				end, db.actor)
+			end)
+			pcall(function()
+				db.actor:iterate_inventory(function(_, item)
+					if ztc_faction_force_shield_is_artifact(item) then
+						cicatrix_present = true
+						ztc_faction_force_shield_sync_item_condition(item)
+					end
+				end, db.actor)
+			end)
+		end
+
+		if other_belt_artefacts then
+			ztc_faction_force_shield._vanilla_arty_hit_orig(s_hit)
+		end
+
+		if cicatrix_present then
+			ztc_faction_force_shield_preserve_cicatrix_items()
 		end
 	end
 
-	if not ztc_faction_force_shield._inv_info_hooked and ui_inventory.UIInventory.UpdateInfo then
-		ztc_faction_force_shield._inv_info_hooked = true
-		ztc_faction_force_shield._inventory_update_info_orig = ui_inventory.UIInventory.UpdateInfo
+	ztc_faction_force_shield._vanilla_arty_hit_wrapped = wrapped_actor_on_before_hit
+	_G.actor_on_before_hit = wrapped_actor_on_before_hit
 
-		function ui_inventory.UIInventory:UpdateInfo(go)
-			ztc_faction_force_shield_sync_actor_items()
-			return ztc_faction_force_shield._inventory_update_info_orig(self, go)
+	pcall(function()
+		UnregisterScriptCallback("actor_on_before_hit", orig)
+		RegisterScriptCallback("actor_on_before_hit", wrapped_actor_on_before_hit)
+	end)
+
+	ztc_faction_force_shield._vanilla_arty_hit_guard_installed = true
+end
+
+local function ztc_faction_force_shield_install_item_protection_hooks()
+	if ztc_faction_force_shield._protect_hooked then
+		return
+	end
+
+	if utils_item and utils_item.degrade and not ztc_faction_force_shield._degrade_orig then
+		ztc_faction_force_shield._degrade_orig = utils_item.degrade
+
+		function utils_item.degrade(obj, num)
+			if ztc_faction_force_shield_is_artifact(obj) then
+				ztc_faction_force_shield_sync_item_condition(obj)
+				return obj:condition()
+			end
+			return ztc_faction_force_shield._degrade_orig(obj, num)
 		end
 	end
+
+	ztc_faction_force_shield_install_vanilla_arty_hit_guard()
+
+	ztc_faction_force_shield._protect_hooked = true
 end
 
 local function ztc_faction_force_shield_install_ui_hooks()
@@ -558,11 +833,25 @@ local function ztc_faction_force_shield_install_ui_hook()
 end
 
 function ztc_faction_force_shield_try_install_ui_hooks()
+	if not ztc_faction_force_shield_actor_hooks_wanted() then
+		return
+	end
 	ztc_faction_force_shield_install_ui_hook()
 	ztc_faction_force_shield_install_ui_hooks()
 end
 
+function ztc_faction_force_shield_try_install_actor_hooks()
+	if not ztc_faction_force_shield_actor_hooks_wanted() then
+		ztc_faction_force_shield_release_actor_hooks()
+		return
+	end
+	ztc_faction_force_shield_try_install_ui_hooks()
+	ztc_faction_force_shield_install_item_protection_hooks()
+end
+
 ztc_faction_force_shield.try_install_ui_hooks = ztc_faction_force_shield_try_install_ui_hooks
+ztc_faction_force_shield.try_install_actor_hooks = ztc_faction_force_shield_try_install_actor_hooks
+ztc_faction_force_shield.actor_hooks_wanted = ztc_faction_force_shield_actor_hooks_wanted
 
 local function ztc_faction_force_shield_is_bullet_hit(shit)
 	if not shit or not shit.type or not hit or hit.fire_wound == nil then
@@ -571,19 +860,15 @@ local function ztc_faction_force_shield_is_bullet_hit(shit)
 	return shit.type == hit.fire_wound
 end
 
-local function ztc_faction_force_shield_apply_reduction(shit, damage_mult, charge)
+local function ztc_faction_force_shield_apply_reduction(shit, damage_mult)
 	if not ztc_faction_force_shield_is_bullet_hit(shit) then
 		return
 	end
 	if not shit.power or shit.power <= 0 then
 		return
 	end
-	if not charge or charge <= 0 then
-		return
-	end
 
-	local scaled_mult = 1.0 - ((1.0 - damage_mult) * charge)
-	shit.power = shit.power * scaled_mult
+	shit.power = shit.power * damage_mult
 end
 
 local function ztc_faction_force_shield_debug_log(fmt, ...)
@@ -599,6 +884,61 @@ local function ztc_faction_force_shield_lock_item(item)
 	end
 	pcall(function()
 		item:set_can_take(false)
+	end)
+end
+
+local function ztc_faction_force_shield_get_item_by_id(obj_id)
+	if not obj_id then
+		return nil
+	end
+
+	local item = level and level.object_by_id(obj_id)
+	if not item then
+		return nil
+	end
+
+	local ok, section = pcall(function()
+		return item:section()
+	end)
+	if not ok or not section then
+		return nil
+	end
+
+	return item
+end
+
+local function ztc_faction_force_shield_return_item_to_actor(obj_id)
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
+		return
+	end
+
+	local item = ztc_faction_force_shield_get_item_by_id(obj_id)
+	if not item or not ztc_faction_force_shield_is_artifact(item) then
+		return
+	end
+
+	pcall(function()
+		local parent = item:parent()
+		if parent and parent:id() ~= db.actor:id() then
+			db.actor:transfer_item(item, db.actor)
+		else
+			db.actor:move_to_ruck(item)
+		end
+	end)
+
+	ztc_faction_force_shield_lock_item(item)
+end
+
+local function ztc_faction_force_shield_schedule_return_to_actor(obj, event_prefix)
+	if not obj then
+		return
+	end
+
+	local obj_id = obj:id()
+	local event_name = event_prefix .. "_" .. tostring(obj_id)
+	CreateTimeEvent(event_name, "go", RETURN_ITEM_DELAY_SEC, function()
+		ztc_faction_force_shield_return_item_to_actor(obj_id)
+		return true
 	end)
 end
 
@@ -641,6 +981,10 @@ local function ztc_faction_force_shield_play_hit_vfx(obj, bone_id)
 		return
 	end
 
+	if ztc_faction_force_shield_get_sim_time_factor() >= HIT_VFX_SKIP_TF then
+		return
+	end
+
 	local id = obj:id()
 	local now = time_global()
 	if last_hit_vfx_ts[id] and (now - last_hit_vfx_ts[id]) < HIT_VFX_DEBOUNCE_MS then
@@ -670,7 +1014,7 @@ end
 
 local function ztc_faction_force_shield_set_broken()
 	if actor_shield_broken then
-		return
+		return false
 	end
 
 	actor_shield_broken = true
@@ -679,6 +1023,9 @@ local function ztc_faction_force_shield_set_broken()
 	last_ui_charge_pct = -1
 	ztc_faction_force_shield_play_broken_sound()
 	ztc_faction_force_shield_debug_log("shield broken")
+	ztc_faction_force_shield_mark_artifact_transition()
+	ztc_faction_force_shield_sync_cicatrix_items(true)
+	return true
 end
 
 local function ztc_faction_force_shield_resolve_hit_weapon(shit)
@@ -806,29 +1153,28 @@ local function ztc_faction_force_shield_drain_charge_from_hit(shit)
 	ztc_faction_force_shield_debug_log("charge drained %.0f%% (now %d%%)", drain * 100, ztc_faction_force_shield_get_charge_percent())
 
 	if actor_shield_charge <= 0 then
-		ztc_faction_force_shield_set_broken()
+		if ztc_faction_force_shield_set_broken() then
+			ztc_faction_force_shield_schedule_hit_recovery(true)
+		end
 	end
 end
 
-local function ztc_faction_force_shield_handle_bullet_hit(target, shit, bone_id, damage_mult, charge, drain_on_hit)
+local function ztc_faction_force_shield_handle_bullet_hit(target, shit, bone_id, damage_mult, drain_on_hit)
 	if not ztc_faction_force_shield_is_bullet_hit(shit) then
 		return
 	end
 	if not shit.power or shit.power <= 0 then
 		return
 	end
-	if not charge or charge <= 0 then
-		return
-	end
 
-	ztc_faction_force_shield_apply_reduction(shit, damage_mult, charge)
+	ztc_faction_force_shield_apply_reduction(shit, damage_mult)
 	if drain_on_hit then
 		ztc_faction_force_shield_drain_charge_from_hit(shit)
 	end
 	ztc_faction_force_shield_play_hit_vfx(target, bone_id)
 end
 
-local function ztc_faction_force_shield_actor_has_artifact()
+ztc_faction_force_shield_actor_has_artifact = function()
 	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
 		return false
 	end
@@ -868,8 +1214,41 @@ local function ztc_faction_force_shield_lock_actor_artifacts()
 	end)
 end
 
-local function ztc_faction_force_shield_release_item(item)
-	if not item then
+local function ztc_faction_force_shield_count_unique_artifacts()
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
+		return 0
+	end
+
+	local seen = {}
+	local count = 0
+
+	local function count_item(_, item)
+		if not ztc_faction_force_shield_is_artifact(item) then
+			return
+		end
+		local id = item:id()
+		if id and not seen[id] then
+			seen[id] = true
+			count = count + 1
+		end
+	end
+
+	pcall(function()
+		db.actor:iterate_belt(count_item, db.actor)
+		db.actor:iterate_inventory(count_item, db.actor)
+	end)
+
+	return count
+end
+
+local function ztc_faction_force_shield_release_item(item, force)
+	if not item or not ztc_faction_force_shield_is_artifact(item) then
+		return
+	end
+
+	if not force and ztc_faction_force_shield_count_unique_artifacts() <= 1 then
+		ztc_faction_force_shield_debug_log("blocked release of last Cicatrix id=%s", tostring(item:id()))
+		ztc_faction_force_shield_lock_item(item)
 		return
 	end
 
@@ -894,11 +1273,19 @@ local function ztc_faction_force_shield_prune_duplicate_artifacts()
 
 	local keep = nil
 	local extras = {}
+	local seen_ids = {}
 
 	local function collect(_, item)
 		if not ztc_faction_force_shield_is_artifact(item) then
 			return
 		end
+
+		local id = item:id()
+		if not id or seen_ids[id] then
+			return
+		end
+		seen_ids[id] = true
+
 		if not keep then
 			keep = item
 		else
@@ -912,7 +1299,7 @@ local function ztc_faction_force_shield_prune_duplicate_artifacts()
 	end)
 
 	for _, item in ipairs(extras) do
-		ztc_faction_force_shield_release_item(item)
+		ztc_faction_force_shield_release_item(item, true)
 		ztc_faction_force_shield_debug_log("removed duplicate Cicatrix id=%s", tostring(item and item:id()))
 	end
 
@@ -923,6 +1310,86 @@ local function ztc_faction_force_shield_prune_duplicate_artifacts()
 	return keep ~= nil
 end
 
+local function ztc_faction_force_shield_prune_owner_duplicate_artifacts(owner, keep_count)
+	if not owner then
+		return false
+	end
+
+	keep_count = tonumber(keep_count) or 1
+	if keep_count < 0 then
+		keep_count = 0
+	end
+
+	local keep = {}
+	local extras = {}
+	local seen_ids = {}
+
+	local function collect(_, item)
+		if not ztc_faction_force_shield_is_artifact(item) then
+			return
+		end
+
+		local id = item:id()
+		if not id or seen_ids[id] then
+			return
+		end
+		seen_ids[id] = true
+
+		if #keep < keep_count then
+			keep[#keep + 1] = item
+		else
+			extras[#extras + 1] = item
+		end
+	end
+
+	pcall(function()
+		owner:iterate_belt(collect, owner)
+		owner:iterate_inventory(collect, owner)
+	end)
+
+	for _, item in ipairs(extras) do
+		ztc_faction_force_shield_release_item(item, true)
+		ztc_faction_force_shield_debug_log(
+			"removed duplicate Cicatrix on %s id=%s",
+			owner:name(),
+			tostring(item and item:id())
+		)
+	end
+
+	for _, item in ipairs(keep) do
+		ztc_faction_force_shield_lock_item(item)
+	end
+
+	return #keep > 0
+end
+
+local function ztc_faction_force_shield_count_owner_artifacts(owner)
+	if not owner then
+		return 0
+	end
+
+	local seen = {}
+	local count = 0
+
+	local function count_item(_, item)
+		if not ztc_faction_force_shield_is_artifact(item) then
+			return
+		end
+		local id = item:id()
+		if id and not seen[id] then
+			seen[id] = true
+			count = count + 1
+		end
+	end
+
+	pcall(function()
+		owner:iterate_belt(count_item, owner)
+		owner:iterate_inventory(count_item, owner)
+	end)
+
+	return count
+end
+
 local function ztc_faction_force_shield_strip_artifact(obj)
 	if not obj then
 		return
@@ -930,7 +1397,7 @@ local function ztc_faction_force_shield_strip_artifact(obj)
 
 	local function strip(_, item)
 		if ztc_faction_force_shield_is_artifact(item) then
-			ztc_faction_force_shield_release_item(item)
+			ztc_faction_force_shield_release_item(item, true)
 		end
 	end
 
@@ -986,11 +1453,19 @@ local function ztc_faction_force_shield_try_move_to_belt(owner)
 end
 
 local function ztc_faction_force_shield_equip_owner(owner, reason)
-	if not owner or not ztc_faction_utils or not ztc_faction_utils.obj_is_sin(owner) then
+	if not owner or not ztc_faction_force_shield_obj_is_alive(owner) then
+		return
+	end
+	if not ztc_faction_utils or not ztc_faction_utils.obj_is_sin(owner) then
 		return
 	end
 
-	if ztc_faction_force_shield_obj_has_on_belt(owner) then
+	ztc_faction_force_shield_prune_owner_duplicate_artifacts(owner, 1)
+
+	if ztc_faction_force_shield_obj_has_artifact(owner) then
+		if not ztc_faction_force_shield_obj_has_on_belt(owner) then
+			ztc_faction_force_shield_try_move_to_belt(owner)
+		end
 		return
 	end
 
@@ -998,17 +1473,21 @@ local function ztc_faction_force_shield_equip_owner(owner, reason)
 		alife_create_item(ARTIFACT_SECTION, owner)
 	end)
 
+	ztc_faction_force_shield_prune_owner_duplicate_artifacts(owner, 1)
 	if ztc_faction_force_shield_try_move_to_belt(owner) then
 		ztc_faction_force_shield_debug_log("equipped on %s (%s)", owner:name(), reason or "?")
 	end
 end
 
 local function ztc_faction_force_shield_schedule_equip(owner, reason)
-	if not owner then
+	if not ztc_faction_force_shield_obj_is_alive(owner) then
 		return
 	end
 
 	local id = owner:id()
+	if not id then
+		return
+	end
 	if npc_equip_pending[id] then
 		return
 	end
@@ -1017,16 +1496,17 @@ local function ztc_faction_force_shield_schedule_equip(owner, reason)
 	local event_name = "ztc_faction_fs_equip_" .. tostring(id)
 	CreateTimeEvent(event_name, "go", EQUIP_DELAY_SEC, function()
 		npc_equip_pending[id] = nil
-		if not owner or not owner.alive or not owner:alive() then
+		local npc = level and level.object_by_id(id)
+		if not ztc_faction_force_shield_obj_is_alive(npc) then
 			return true
 		end
-		ztc_faction_force_shield_equip_owner(owner, reason)
+		ztc_faction_force_shield_equip_owner(npc, reason)
 		return true
 	end)
 end
 
-local function ztc_faction_force_shield_try_grant_actor()
-	if actor_shield_granted then
+ztc_faction_force_shield_try_grant_actor = function()
+	if actor_shield_granted and ztc_faction_force_shield_actor_has_artifact() then
 		ztc_faction_force_shield_prune_duplicate_artifacts()
 		ztc_faction_force_shield_lock_actor_artifacts()
 		return true
@@ -1036,11 +1516,19 @@ local function ztc_faction_force_shield_try_grant_actor()
 		return false
 	end
 
+	if ztc_faction_force_shield_artifact_transition_active() then
+		return actor_shield_granted
+	end
+
 	if not ztc_faction_force_shield_actor_enabled() then
 		return false
 	end
 	if not ztc_faction_utils or not ztc_faction_utils.actor_is_sin or not ztc_faction_utils.actor_is_sin() then
 		return false
+	end
+
+	if ztc_faction_force_shield_inventory_ui_open() then
+		return actor_shield_granted or ztc_faction_force_shield_actor_has_artifact()
 	end
 
 	if ztc_faction_force_shield_prune_duplicate_artifacts() or ztc_faction_force_shield_actor_has_artifact() then
@@ -1076,8 +1564,79 @@ local function ztc_faction_force_shield_try_grant_actor()
 	return true
 end
 
+local function ztc_faction_force_shield_enforce_actor_artifact()
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
+		return
+	end
+
+	if ztc_faction_force_shield_inventory_ui_open() then
+		return
+	end
+
+	ztc_faction_force_shield_sync_cicatrix_items(true)
+
+	if ztc_faction_force_shield_actor_has_on_belt() then
+		return
+	end
+
+	if ztc_faction_force_shield_actor_has_in_inventory() then
+		-- Broken / empty charge: keep in inventory while recharging; do not fight manual belt moves.
+		if not ztc_faction_force_shield_is_broken() and actor_shield_charge > 0 then
+			ztc_faction_force_shield_try_move_to_belt(db.actor)
+		end
+		return
+	end
+
+	if ztc_faction_force_shield_artifact_transition_active() then
+		return
+	end
+
+	ztc_faction_force_shield_debug_log("Cicatrix missing — re-granting")
+	actor_shield_granted = false
+	ztc_faction_force_shield_try_grant_actor()
+	if not ztc_faction_force_shield_is_broken() and actor_shield_charge > 0 then
+		ztc_faction_force_shield_try_move_to_belt(db.actor)
+	end
+end
+
+ztc_faction_force_shield_preserve_cicatrix_items = function()
+	ztc_faction_force_shield_sync_cicatrix_items(true)
+
+	if ztc_faction_force_shield_actor_has_artifact_safe() then
+		return true
+	end
+
+	if ztc_faction_force_shield_actor_enabled()
+		and ztc_faction_utils
+		and ztc_faction_utils.actor_is_sin
+		and ztc_faction_utils.actor_is_sin() then
+		ztc_faction_force_shield_enforce_actor_artifact()
+	end
+
+	return ztc_faction_force_shield_actor_has_artifact()
+end
+
+ztc_faction_force_shield_schedule_hit_recovery = function(force)
+	if hit_recover_pending then
+		return
+	end
+	if not force and ztc_faction_force_shield_sim_skip_heavy() then
+		return
+	end
+
+	hit_recover_pending = true
+	CreateTimeEvent("ztc_faction_fs_hit_recover", "go", HIT_RECOVER_DELAY_SEC, function()
+		hit_recover_pending = false
+		ztc_faction_force_shield_preserve_cicatrix_items()
+		return true
+	end)
+end
+
 local function ztc_faction_force_shield_schedule_grant_retries()
-	if actor_shield_granted or grant_deadline_ts > 0 then
+	if grant_deadline_ts > 0 then
+		return
+	end
+	if actor_shield_granted and ztc_faction_force_shield_actor_has_artifact() then
 		return
 	end
 
@@ -1090,6 +1649,7 @@ local function ztc_faction_force_shield_sync_actor_toggle()
 		if actor_shield_granted or ztc_faction_force_shield_actor_has_artifact() then
 			ztc_faction_force_shield_strip_actor()
 		end
+		ztc_faction_force_shield_release_actor_hooks()
 		return
 	end
 
@@ -1097,13 +1657,25 @@ local function ztc_faction_force_shield_sync_actor_toggle()
 		return
 	end
 	if not ztc_faction_utils.actor_is_sin() then
+		ztc_faction_force_shield_release_actor_hooks()
 		return
 	end
 
+	local inventory_open = ztc_faction_force_shield_inventory_ui_open()
+
 	if not ztc_faction_force_shield_actor_has_artifact() then
 		ztc_faction_force_shield_schedule_grant_retries()
-		ztc_faction_force_shield_try_grant_actor()
+		if not inventory_open then
+			ztc_faction_force_shield_try_grant_actor()
+		end
 	end
+
+	if inventory_open then
+		ztc_faction_force_shield_schedule_post_inventory_work()
+		return
+	end
+
+	ztc_faction_force_shield_try_install_actor_hooks()
 end
 
 local function ztc_faction_force_shield_is_actor_slot(slot)
@@ -1136,22 +1708,49 @@ function ztc_faction_force_shield_actor_on_before_hit(shit, bone_id, flags)
 		return
 	end
 
-	ztc_faction_force_shield_handle_bullet_hit(db.actor, shit, bone_id, ztc_faction_force_shield_player_damage_mult(), actor_shield_charge, true)
+	ztc_faction_force_shield_handle_bullet_hit(db.actor, shit, bone_id, ztc_faction_force_shield_player_damage_mult(), true)
+	ztc_faction_force_shield_preserve_cicatrix_items()
+
+	if actor_shield_broken then
+		ztc_faction_force_shield_schedule_hit_recovery(true)
+	elseif not ztc_faction_force_shield_sim_skip_heavy() then
+		ztc_faction_force_shield_sync_actor_items()
+		ztc_faction_force_shield_schedule_hit_recovery()
+	end
 end
 
 function ztc_faction_force_shield_npc_on_before_hit(npc, shit, bone_id, flags)
 	if not ztc_faction_force_shield_npc_enabled() then
 		return
 	end
-	if not npc or not ztc_faction_utils or not ztc_faction_utils.obj_is_sin(npc) then
+	if not ztc_faction_force_shield_obj_is_alive(npc) then
+		return
+	end
+	if not ztc_faction_utils or not ztc_faction_utils.obj_is_sin(npc) then
 		return
 	end
 
-	ztc_faction_force_shield_handle_bullet_hit(npc, shit, bone_id, ztc_faction_force_shield_npc_damage_mult(), 1.0)
+	if ztc_faction_force_shield_count_owner_artifacts(npc) > 1 then
+		ztc_faction_force_shield_prune_owner_duplicate_artifacts(npc, 1)
+	end
+
+	ztc_faction_force_shield_handle_bullet_hit(npc, shit, bone_id, ztc_faction_force_shield_npc_damage_mult())
+end
+
+function ztc_faction_force_shield_on_server_entity_unregister(se_obj, typ)
+	if not se_obj or not se_obj.id then
+		return
+	end
+	local id = se_obj.id
+	npc_equip_pending[id] = nil
+	last_hit_vfx_ts[id] = nil
 end
 
 function ztc_faction_force_shield_npc_on_net_spawn(npc, se_obj)
 	if not ztc_faction_force_shield_npc_enabled() or not npc then
+		return
+	end
+	if ztc_faction_utils and ztc_faction_utils.sim_skip_net_spawn_hooks and ztc_faction_utils.sim_skip_net_spawn_hooks() then
 		return
 	end
 	if not ztc_faction_utils or not ztc_faction_utils.obj_is_sin(npc) then
@@ -1165,7 +1764,9 @@ function ztc_faction_force_shield_npc_on_death_callback(npc, who)
 	if not npc then
 		return
 	end
-	ztc_faction_force_shield_strip_artifact(npc)
+	if ztc_faction_utils and ztc_faction_utils.obj_is_sin(npc) then
+		ztc_faction_force_shield_prune_owner_duplicate_artifacts(npc, 1)
+	end
 	last_hit_vfx_ts[npc:id()] = nil
 	npc_equip_pending[npc:id()] = nil
 end
@@ -1175,9 +1776,14 @@ function ztc_faction_force_shield_actor_item_to_belt(obj)
 		return
 	end
 	if ztc_faction_force_shield_is_artifact(obj) then
+		ztc_faction_force_shield_mark_artifact_transition()
 		ztc_faction_force_shield_lock_item(obj)
 		ztc_faction_force_shield_sync_item_condition(obj)
 		last_ui_charge_pct = -1
+		CreateTimeEvent("ztc_faction_fs_belt_verify", "go", 0.15, function()
+			ztc_faction_force_shield_preserve_cicatrix_items()
+			return true
+		end)
 	end
 end
 
@@ -1186,6 +1792,7 @@ function ztc_faction_force_shield_actor_item_to_ruck(obj)
 		return
 	end
 	if ztc_faction_force_shield_is_artifact(obj) then
+		ztc_faction_force_shield_mark_artifact_transition()
 		ztc_faction_force_shield_sync_item_condition(obj)
 		last_ui_charge_pct = -1
 	end
@@ -1211,19 +1818,7 @@ function ztc_faction_force_shield_actor_on_item_drop(obj)
 		return
 	end
 
-	CreateTimeEvent("ztc_faction_fs_return_drop", "go", 0, function()
-		if db.actor and obj and obj:parent() and obj:parent():id() ~= db.actor:id() then
-			pcall(function()
-				db.actor:transfer_item(obj, db.actor)
-			end)
-		elseif db.actor and obj then
-			pcall(function()
-				db.actor:move_to_ruck(obj)
-			end)
-		end
-		ztc_faction_force_shield_lock_item(obj)
-		return true
-	end)
+	ztc_faction_force_shield_schedule_return_to_actor(obj, "ztc_faction_fs_return_drop")
 end
 
 function ztc_faction_force_shield_actor_menu_before_move(flags, npc_id, obj, mode, bag_id)
@@ -1249,24 +1844,16 @@ function ztc_faction_force_shield_actor_menu_drag_drop(obj_from, obj_to, slot_fr
 
 	if not ztc_faction_force_shield_is_actor_slot(slot_to) then
 		if db.actor and obj_from then
-			CreateTimeEvent("ztc_faction_fs_return_drag", "go", 0, function()
-				pcall(function()
-					db.actor:move_to_ruck(obj_from)
-				end)
-				ztc_faction_force_shield_lock_item(obj_from)
-				return true
-			end)
+			ztc_faction_force_shield_schedule_return_to_actor(obj_from, "ztc_faction_fs_return_drag")
 		end
 	end
 end
 
 function ztc_faction_force_shield_actor_on_first_update()
 	ztc_faction_force_shield_sync_actor_toggle()
-	if not ztc_faction_force_shield_actor_enabled() then
-		return
+	if ztc_faction_force_shield_actor_enabled() then
+		ztc_faction_force_shield_prune_duplicate_artifacts()
 	end
-	ztc_faction_force_shield_prune_duplicate_artifacts()
-	ztc_faction_force_shield_try_install_ui_hooks()
 end
 
 function ztc_faction_force_shield_actor_on_update()
@@ -1275,15 +1862,20 @@ function ztc_faction_force_shield_actor_on_update()
 		return
 	end
 
+	if ztc_faction_force_shield_sim_skip_heavy() then
+		return
+	end
+
 	local now = time_global()
+	local grant_retry_ms = ztc_faction_force_shield_sim_interval_ms(500)
+	local sync_interval_ms = ztc_faction_force_shield_sim_interval_ms(CONDITION_SYNC_MS)
 
 	if grant_deadline_ts > 0 then
 		if now <= grant_deadline_ts and now >= grant_next_try_ts then
-			grant_next_try_ts = now + 500
+			grant_next_try_ts = now + grant_retry_ms
 			if actor_shield_granted and ztc_faction_force_shield_actor_has_artifact() then
-				ztc_faction_force_shield_prune_duplicate_artifacts()
 				grant_deadline_ts = 0
-			else
+			elseif not ztc_faction_force_shield_inventory_ui_open() then
 				ztc_faction_force_shield_try_grant_actor()
 			end
 		elseif now > grant_deadline_ts then
@@ -1301,17 +1893,29 @@ function ztc_faction_force_shield_actor_on_update()
 
 	local delta_sec = (now - last_charge_update_ts) / 1000.0
 	last_charge_update_ts = now
+	if delta_sec > MAX_CHARGE_UPDATE_DELTA_SEC then
+		delta_sec = MAX_CHARGE_UPDATE_DELTA_SEC
+	end
 	ztc_faction_force_shield_update_charge(delta_sec)
 
+	local charge_pct = ztc_faction_force_shield_get_charge_percent()
+	if charge_pct ~= last_ui_charge_pct then
+		last_ui_charge_pct = charge_pct
+		ztc_faction_force_shield_refresh_open_inventory_ui()
+	end
+
 	if now >= condition_sync_next_ts then
-		condition_sync_next_ts = now + CONDITION_SYNC_MS
+		condition_sync_next_ts = now + sync_interval_ms
 		ztc_faction_force_shield_sync_actor_items()
 	end
 end
 
-function ztc_faction_force_shield_on_game_load()
+function ztc_faction_force_shield_finish_game_load()
 	if not ztc_faction_force_shield_actor_enabled() then
-		ztc_faction_force_shield_strip_actor()
+		if actor_shield_granted or ztc_faction_force_shield_actor_has_artifact() then
+			ztc_faction_force_shield_strip_actor()
+		end
+		ztc_faction_force_shield_release_actor_hooks()
 		return
 	end
 
@@ -1320,16 +1924,29 @@ function ztc_faction_force_shield_on_game_load()
 			ztc_faction_force_shield_prune_duplicate_artifacts()
 			if ztc_faction_force_shield_actor_has_artifact() then
 				ztc_faction_force_shield_lock_actor_artifacts()
+				ztc_faction_force_shield_try_install_actor_hooks()
 				return
 			end
+			ztc_faction_force_shield_debug_log("grant flag set but item missing after load — re-granting")
+		else
 			ztc_faction_force_shield_debug_log("grant flag set but item not spawned yet — waiting")
 		end
 		ztc_faction_force_shield_schedule_grant_retries()
+		ztc_faction_force_shield_try_grant_actor()
+		ztc_faction_force_shield_try_install_actor_hooks()
 		return
 	end
 
 	ztc_faction_force_shield_schedule_grant_retries()
 	ztc_faction_force_shield_try_grant_actor()
+	ztc_faction_force_shield_try_install_actor_hooks()
+end
+
+function ztc_faction_force_shield_on_game_load()
+	CreateTimeEvent("ztc_faction_fs_load", "verify", 0.15, function()
+		ztc_faction_force_shield_finish_game_load()
+		return true
+	end)
 end
 
 function ztc_faction_force_shield_save_state(mdata)
@@ -1357,7 +1974,7 @@ function ztc_faction_force_shield_load_state(mdata)
 end
 
 function ztc_faction_force_shield_on_option_change(mcm)
-	CreateTimeEvent("ztc_faction_fs_mcm_toggle", "go", 0.05, function()
+	CreateTimeEvent("ztc_faction_fs_mcm_toggle", "go", 0.25, function()
 		ztc_faction_force_shield_sync_actor_toggle()
 		return true
 	end)
@@ -1367,6 +1984,7 @@ function on_game_start()
 	RegisterScriptCallback("actor_on_before_hit", ztc_faction_force_shield_actor_on_before_hit)
 	RegisterScriptCallback("npc_on_before_hit", ztc_faction_force_shield_npc_on_before_hit)
 	RegisterScriptCallback("npc_on_net_spawn", ztc_faction_force_shield_npc_on_net_spawn)
+	RegisterScriptCallback("server_entity_on_unregister", ztc_faction_force_shield_on_server_entity_unregister)
 	RegisterScriptCallback("npc_on_death_callback", ztc_faction_force_shield_npc_on_death_callback)
 	RegisterScriptCallback("actor_item_to_belt", ztc_faction_force_shield_actor_item_to_belt)
 	RegisterScriptCallback("actor_item_to_ruck", ztc_faction_force_shield_actor_item_to_ruck)
@@ -1380,17 +1998,17 @@ function on_game_start()
 	RegisterScriptCallback("save_state", ztc_faction_force_shield_save_state)
 	RegisterScriptCallback("load_state", ztc_faction_force_shield_load_state)
 	RegisterScriptCallback("on_option_change", ztc_faction_force_shield_on_option_change)
-
-	ztc_faction_force_shield_try_install_ui_hooks()
-
-	CreateTimeEvent("ztc_faction_fs_ui_hook_retry", "go", 1.0, function()
-		ztc_faction_force_shield_try_install_ui_hooks()
-		return true
+	RegisterScriptCallback("ActorMenu_on_mode_changed", ztc_faction_force_shield_on_actor_menu_mode)
+	RegisterScriptCallback("GUI_on_show", function(name)
+		if name == "Inventory" or name == "InventoryTrade" then
+			last_ui_charge_pct = -1
+		end
 	end)
 
 	CreateTimeEvent("ztc_faction_fs_boot_grant", "go", 3.0, function()
 		if not ztc_faction_force_shield_actor_enabled() then
 			ztc_faction_force_shield_strip_actor()
+			ztc_faction_force_shield_release_actor_hooks()
 			return true
 		end
 		if not actor_shield_granted then

@@ -1,0 +1,344 @@
+-- Loner teamup requests (ZTC Faction Tweaks). Low-rank loners traveling alone broadcast on PDA.
+
+_G.ztc_faction_loners_teamup_requests = _G.ztc_faction_loners_teamup_requests or {}
+local teamup = _G.ztc_faction_loners_teamup_requests
+
+local DIALOG_ID = "ztc_loners_teamup_request_dialog"
+local SAVE_PREFIX = "ztc_loners_teamup_"
+
+local teamup_enabled = false
+local request_interval_sec = 1500
+local request_chance = 0.3
+
+local last_request_time = 0
+local npcs_requests = {}
+local previous_npc_id = nil
+local previous_msg = nil
+
+local function get_se_obj_id(se_obj)
+	if not se_obj then
+		return nil
+	end
+	if type(se_obj) == "number" then
+		return se_obj
+	end
+	if se_obj.id ~= nil then
+		return se_obj.id
+	end
+	local ok, id = pcall(function()
+		return se_obj:id()
+	end)
+	return ok and id or nil
+end
+
+local function se_obj_is_alive(se_obj)
+	if not se_obj then
+		return false
+	end
+	local ok, alive = pcall(function()
+		return se_obj:alive()
+	end)
+	return ok and alive == true
+end
+
+local function se_obj_section_name(se_obj)
+	if not se_obj then
+		return nil
+	end
+	local ok, section = pcall(function()
+		return se_obj:section_name()
+	end)
+	return ok and section or nil
+end
+
+local function se_obj_clsid(se_obj)
+	if not se_obj then
+		return nil
+	end
+	local ok, clsid = pcall(function()
+		return se_obj:clsid()
+	end)
+	return ok and clsid or nil
+end
+
+local LOW_RANKS = {
+	novice = true,
+	trainee = true,
+	experienced = true,
+}
+
+function teamup.is_feature_enabled()
+	if not ztc_faction_mcm or not ztc_faction_mcm.is_enabled then
+		return false
+	end
+	if not ztc_faction_mcm.is_enabled() then
+		return false
+	end
+	if ztc_faction_mcm.get_config("loners_teamup_requests_enabled") ~= true then
+		return false
+	end
+	return true
+end
+
+function teamup.is_loner_actor()
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid() then
+		return false
+	end
+	if get_actor_true_community then
+		return get_actor_true_community() == "stalker"
+	end
+	return false
+end
+
+function teamup.is_enabled(actor, npc)
+	return teamup.is_feature_enabled() and teamup.is_loner_actor()
+end
+
+function teamup.is_loner_npc(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	if not who then
+		return false
+	end
+	if character_community then
+		return character_community(who) == "stalker"
+	end
+	return false
+end
+
+function teamup.is_character_id_loner(character_id)
+	if not character_id or character_id == "actor_stalker" then
+		return false
+	end
+	return string.find(character_id, "sim_default_stalker", 1, true) ~= nil
+end
+
+function teamup.has_active_request()
+	for _ in pairs(npcs_requests) do
+		return true
+	end
+	return previous_npc_id ~= nil
+end
+
+function teamup.is_not_quest_npc(se_obj)
+	if not se_obj then
+		return false
+	end
+	if not IsStalker(nil, se_obj_clsid(se_obj)) then
+		return false
+	end
+	if not se_obj_is_alive(se_obj) then
+		return false
+	end
+	local section = se_obj_section_name(se_obj)
+	if not section or not string.find(section, "sim_default", 1, true) then
+		return false
+	end
+	local se_id = get_se_obj_id(se_obj)
+	if se_id and get_object_story_id(se_id) then
+		return false
+	end
+	if se_obj.group_id and se_obj.group_id ~= 65535 and get_object_story_id(se_obj.group_id) then
+		return false
+	end
+	return true
+end
+
+function teamup.is_not_enemy(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	if not who then
+		return false
+	end
+	if not get_object_squad(who) then
+		return false
+	end
+	return who:relation(db.actor) ~= game_object.enemy
+end
+
+function teamup.get_viable_npc()
+	local candidates = {}
+	for i = 1, #(db.OnlineStalkers or {}) do
+		local id = db.OnlineStalkers[i]
+		local npc = id and level.object_by_id(id)
+		local squad = npc and get_object_squad(npc)
+		local se_obj = id and alife_object(id)
+		if npc
+		and npc:alive()
+		and squad
+		and teamup.is_not_quest_npc(se_obj)
+		and character_community(npc) == "stalker"
+		and ranks.get_obj_rank_name(npc)
+		and LOW_RANKS[ranks.get_obj_rank_name(npc)]
+		and utils_obj.get_squad_count(npc) == 1
+		and xr_conditions.is_squad_commander(db.actor, npc)
+		and not get_object_story_id(npc:id())
+		and not (axr_companions and axr_companions.companion_squads and axr_companions.companion_squads[squad.id])
+		and dialogs_axr_companion.is_not_hostage_task_giver(db.actor, npc)
+		and dialogs_axr_companion.is_room_in_actor_squad(db.actor, npc)
+		and teamup.is_not_enemy(db.actor, npc)
+		and not npcs_requests[npc:id()] then
+			candidates[#candidates + 1] = npc
+		end
+	end
+	return (#candidates ~= 0) and candidates[math.random(#candidates)] or nil
+end
+
+function teamup.clear_map_spot()
+	if previous_npc_id then
+		level.map_remove_object_spot(previous_npc_id, "secondary_task_location")
+		previous_npc_id = nil
+		previous_msg = nil
+	end
+end
+
+function teamup.send_pda_message(npc)
+	local name = npc:character_name()
+	local msg_key = "st_ztc_loners_teamup_pda_" .. math.random(1, 2)
+	local msg = string.format(
+		game.translate_string(msg_key),
+		dynamic_news_helper.GetPointDescription(npc),
+		name
+	)
+	news_manager.send_tip(db.actor, msg, nil, npc, 15000)
+	previous_msg = msg
+end
+
+function teamup.add_map_spot(npc)
+	previous_npc_id = npc:id()
+	level.map_add_object_spot(previous_npc_id, "secondary_task_location", previous_msg)
+end
+
+function teamup.try_send_request()
+	if not teamup.is_feature_enabled() then
+		return
+	end
+	if not teamup.is_loner_actor() then
+		return
+	end
+	if teamup.has_active_request() then
+		return
+	end
+
+	local npc = teamup.get_viable_npc()
+	if not npc then
+		return
+	end
+
+	teamup.clear_map_spot()
+	npcs_requests[npc:id()] = true
+	teamup.send_pda_message(npc)
+	teamup.add_map_spot(npc)
+end
+
+function teamup.has_npc_requested_teamup(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	local id = who and who:id()
+	return id ~= nil and npcs_requests[id] == true
+end
+
+function teamup.remove_npc_from_requests(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	if not who then
+		return
+	end
+	local id = who:id()
+	npcs_requests[id] = nil
+	if previous_npc_id == id then
+		teamup.clear_map_spot()
+	end
+end
+
+function teamup.recruit_companion(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	if not who or not who:alive() then
+		return
+	end
+	if not teamup.has_npc_requested_teamup(actor, npc) then
+		return
+	end
+	if dialogs_axr_companion and dialogs_axr_companion.become_actor_companion then
+		dialogs_axr_companion.become_actor_companion(actor, who)
+	end
+	teamup.remove_npc_from_requests(actor, npc)
+end
+
+local function reload_settings()
+	if ztc_faction_mcm and ztc_faction_mcm.get_config then
+		teamup_enabled = ztc_faction_mcm.get_config("loners_teamup_requests_enabled") == true
+		request_interval_sec = ztc_faction_mcm.get_config("loners_teamup_requests_interval") or 1500
+		request_chance = ztc_faction_mcm.get_config("loners_teamup_requests_chance") or 0.3
+	else
+		teamup_enabled = false
+		request_interval_sec = 1500
+		request_chance = 0.3
+	end
+end
+
+function ztc_faction_loners_teamup_on_dialog_list(character_id, dialog_list)
+	if not teamup.is_feature_enabled() then
+		return
+	end
+	if not teamup.is_character_id_loner(character_id) then
+		return
+	end
+	if not dialog_list or not dialog_list.add then
+		return
+	end
+	if dialog_list.has and dialog_list:has(DIALOG_ID) then
+		return
+	end
+	dialog_list:add(DIALOG_ID)
+end
+
+function ztc_faction_loners_teamup_actor_on_update()
+	if not teamup_enabled or not teamup.is_loner_actor() then
+		return
+	end
+
+	local tg = time_global()
+	if last_request_time == 0 then
+		last_request_time = tg + (request_interval_sec * 1000)
+		return
+	end
+	if tg < last_request_time then
+		return
+	end
+
+	last_request_time = tg + (request_interval_sec * 1000)
+
+	if math.random(100) > request_chance * 100 then
+		return
+	end
+
+	teamup.try_send_request()
+end
+
+function ztc_faction_loners_teamup_actor_on_leave_dialog(npc_id)
+	if previous_npc_id == npc_id then
+		level.map_remove_object_spot(previous_npc_id, "secondary_task_location")
+	end
+end
+
+function ztc_faction_loners_teamup_save_state(m_data)
+	m_data[SAVE_PREFIX .. "npcs_requests"] = npcs_requests
+	m_data[SAVE_PREFIX .. "last_request_time"] = last_request_time
+	m_data[SAVE_PREFIX .. "previous_npc_id"] = previous_npc_id
+	m_data[SAVE_PREFIX .. "previous_msg"] = previous_msg
+end
+
+function ztc_faction_loners_teamup_load_state(m_data)
+	npcs_requests = m_data[SAVE_PREFIX .. "npcs_requests"] or {}
+	last_request_time = m_data[SAVE_PREFIX .. "last_request_time"] or 0
+	previous_npc_id = m_data[SAVE_PREFIX .. "previous_npc_id"]
+	previous_msg = m_data[SAVE_PREFIX .. "previous_msg"]
+end
+
+function on_game_start()
+	RegisterScriptCallback("actor_on_update", ztc_faction_loners_teamup_actor_on_update)
+	RegisterScriptCallback("actor_on_first_update", reload_settings)
+	RegisterScriptCallback("on_specific_character_dialog_list", ztc_faction_loners_teamup_on_dialog_list)
+	RegisterScriptCallback("actor_on_leave_dialog", ztc_faction_loners_teamup_actor_on_leave_dialog)
+	RegisterScriptCallback("save_state", ztc_faction_loners_teamup_save_state)
+	RegisterScriptCallback("load_state", ztc_faction_loners_teamup_load_state)
+	RegisterScriptCallback("on_option_change", reload_settings)
+	RegisterScriptCallback("on_game_load", reload_settings)
+end

@@ -4,10 +4,6 @@
 		<text>Faction Tweaks</text>
 	</string>
 
-	<string id="ui_mcm_menu_monolith">
-		<text>Monolith</text>
-	</string>
-
 	<string id="ui_mcm_ztc_faction_general_title">
 		<text>General</text>
 	</string>
@@ -17,11 +13,363 @@
 	</string>
 
 	<string id="ui_mcm_ztc_faction_enabled_desc">
-		<text>Master switch for all Monolith and SiN faction tweaks below. When off, Monolith psy immunity, rupture resistance, SiN mutant alliance, companions, escorts, and Cicatrix are disabled.</text>
+		<text>Master switch for faction-specific options below.</text>
+	</string>
+
+	<string id="st_ztc_start_companion_item">
+		<text>Starting companion</text>
+	</string>
+
+	<string id="st_ztc_start_companions_spawned">
+		<text>ZTC: Starting companions joined your squad.</text>
+	</string>
+
+	<string id="st_ztc_start_companions_pending">
+		<text>ZTC: Starting companions are on their way...</text>
+	</string>
+
+	<string id="st_ztc_start_companions_mcm_off">
+		<text>ZTC: Starting companions skipped — enable Faction Tweaks in MCM first.</text>
+	</string>
+
+	<string id="st_ztc_start_companions_disabled">
+		<text>ZTC: Could not add starting companions — enable Companions in Gameplay options first.</text>
+	</string>
+
+	<string id="st_ztc_start_companions_failed">
+		<text>ZTC: Failed to spawn starting companions. Check the log for errors.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_paid_escort_always_available">
+		<text>Always offer paid escort</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_paid_escort_always_available_desc">
+		<text>Disables the vanilla random "we have other jobs already" denial. Squads still refuse when your companion party is at its limit.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_placeholder_desc">
+		<text>No options for this faction yet.</text>
+	</string>
+
+	<string id="ui_mcm_menu_loners">
+		<text>Loners</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_loners_title">
+		<text>Loners</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_loners_disable_vanilla_payment_recruitment">
+		<text>Disable Vanilla Payment Recruitment</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_loners_disable_vanilla_payment_recruitment_desc">
+		<text>Blocks neutral Loner squad commanders from offering the vanilla paid escort dialog. Free companion recruitment at friend relation is unchanged.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_loners_teamup_requests_desc">
+		<text>Low-rank Loners traveling alone may broadcast on your PDA asking for company. Find them on the map and recruit through dialog. Vanilla goodwill recruitment is unchanged.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_loners_teamup_requests_enabled">
+		<text>Loner teamup requests</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_loners_teamup_requests_interval">
+		<text>Request check interval (sec)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_loners_teamup_requests_chance">
+		<text>Request chance per check</text>
+	</string>
+
+	<string id="st_ztc_loners_teamup_pda_1">
+		<text>Anyone on this frequency? I'm near %s and I don't like pushing on alone. — %s</text>
+	</string>
+
+	<string id="st_ztc_loners_teamup_pda_2">
+		<text>Is anyone close? I'm at %s and this stretch feels wrong without backup. — %s</text>
+	</string>
+
+	<string id="st_ztc_loners_teamup_ask">
+		<text>I saw your message. You don't have to walk alone.</text>
+	</string>
+
+	<string id="st_ztc_loners_teamup_agree">
+		<text>Thanks, stalker. I'll stick with you.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_loners_share_quest_rewards_enabled">
+		<text>Share quest money rewards</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_loners_share_quest_rewards_enabled_desc">
+		<text>When you complete a quest money payout, split the reward equally among you and your alive Loner companions. Your share is reduced; companions are credited in a PDA tip (not added to their wallets).</text>
+	</string>
+
+	<string id="st_ztc_loners_quest_reward_share_one">
+		<text>Quest reward split equally: %d RU for you, %d RU for %s.</text>
+	</string>
+
+	<string id="st_ztc_loners_quest_reward_share_many">
+		<text>Quest reward split equally: %d RU each for you and your %d companions (%d RU total shared).</text>
+	</string>
+
+	<string id="ui_mcm_menu_bandits">
+		<text>Bandits</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_bandits_title">
+		<text>Bandits</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_bandit_start_with_companions">
+		<text>Start with companions</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_bandit_start_with_companions_desc">
+		<text>When starting a new game as Bandits, spawn companions near you after a short delay. Requires the vanilla Companion system to be enabled. Does not apply to existing saves.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_bandit_start_with_companions_count">
+		<text>Starting companion count</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_bandit_paid_escort_enabled">
+		<text>Paid escort recruitment</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_bandit_paid_escort_enabled_desc">
+		<text>Bandit squad commanders can be hired for timed paid escort (24h / 48h contracts). Vanilla free recruitment at high goodwill is unchanged — paid escort is an additional option.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_bandit_paid_escort_price_24h">
+		<text>24h escort base price (RU)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_bandit_paid_escort_price_24h_desc">
+		<text>Base ruble cost for a 24-hour contract (experienced commander, 1 squad member). Final price scales with commander rank and squad size (+100% per extra member). Vanilla reference: 1500.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_bandit_paid_escort_price_48h">
+		<text>48h escort base price (RU)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_bandit_paid_escort_price_48h_desc">
+		<text>Base ruble cost for a 48-hour contract (experienced commander, 1 squad member). Final price scales with commander rank and squad size (+100% per extra member). Vanilla reference: 3000.</text>
+	</string>
+
+	<string id="ui_mcm_menu_csky">
+		<text>Clear Sky</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_csky_title">
+		<text>Clear Sky</text>
+	</string>
+
+	<string id="ui_mcm_menu_dolg">
+		<text>Duty</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_dolg_title">
+		<text>Duty</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_dolg_start_with_companions">
+		<text>Start with companions</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_dolg_start_with_companions_desc">
+		<text>When starting a new game as Duty, spawn companions near you after a short delay. Requires the vanilla Companion system to be enabled. Does not apply to existing saves.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_dolg_start_with_companions_count">
+		<text>Starting companion count</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_dolg_disable_fleeing">
+		<text>Disable Fleeing</text>
+	</string>
+
+	<string id="ui_mcm_menu_freedom">
+		<text>Freedom</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_freedom_title">
+		<text>Freedom</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_freedom_start_with_companions">
+		<text>Start with companions</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_freedom_start_with_companions_desc">
+		<text>When starting a new game as Freedom, spawn companions near you after a short delay. Requires the vanilla Companion system to be enabled. Does not apply to existing saves.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_freedom_start_with_companions_count">
+		<text>Starting companion count</text>
+	</string>
+
+	<string id="ui_mcm_menu_mercenary">
+		<text>Mercenaries</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_mercenary_title">
+		<text>Mercenaries</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_mercenary_disable_fleeing">
+		<text>Disable Fleeing</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_mercenary_paid_escort_enabled">
+		<text>Contract-only escort</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_mercenary_paid_escort_enabled_desc">
+		<text>Merc squad commanders can only be hired on timed contracts (24h / 48h). Goodwill does not grant free companionship — payment is required at neutral or friend relation. Escort price sliders apply even when Faction Tweaks master switch is off.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_mercenary_paid_escort_price_24h">
+		<text>24h escort base price (RU)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_mercenary_paid_escort_price_24h_desc">
+		<text>Base ruble cost for a 24-hour contract (experienced commander, 1 squad member). Final price scales with commander rank and squad size (+100% per extra member). Vanilla reference: 1500.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_mercenary_paid_escort_price_48h">
+		<text>48h escort base price (RU)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_mercenary_paid_escort_price_48h_desc">
+		<text>Base ruble cost for a 48-hour contract (experienced commander, 1 squad member). Final price scales with commander rank and squad size (+100% per extra member). Vanilla reference: 3000.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_freedom_disable_vanilla_payment_recruitment">
+		<text>Disable Vanilla Payment Recruitment</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_freedom_disable_vanilla_payment_recruitment_desc">
+		<text>Blocks neutral Freedom squad commanders from offering the vanilla paid escort dialog. Free companion recruitment at friend relation is unchanged.</text>
+	</string>
+
+	<string id="ui_mcm_menu_military">
+		<text>Military</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_military_title">
+		<text>Military</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_army_start_with_companions">
+		<text>Start with companions</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_army_start_with_companions_desc">
+		<text>When starting a new game as Military, spawn companions near you after a short delay. Requires the vanilla Companion system to be enabled. Does not apply to existing saves.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_army_start_with_companions_count">
+		<text>Starting companion count</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_military_disable_fleeing">
+		<text>Disable Fleeing</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_disable_fleeing_desc">
+		<text>Blocks combat retreat and panic-flee for all NPCs of this faction when enabled. Applies on spawn and when changed in MCM. Turning off restores vanilla panic threshold on living NPCs; retreat blocks clear on respawn.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_disable_high_rank_fleeing_desc">
+		<text>Blocks combat retreat and panic-flee for Veteran-rank and higher NPCs of this faction (Veteran, Expert, Master, Legend). Lower ranks keep vanilla flee behavior.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_loners_disable_high_rank_fleeing">
+		<text>Disable Fleeing on High Rank NPCs</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_bandits_disable_high_rank_fleeing">
+		<text>Disable Fleeing on High Rank NPCs</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_csky_disable_high_rank_fleeing">
+		<text>Disable Fleeing on High Rank NPCs</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_freedom_disable_high_rank_fleeing">
+		<text>Disable Fleeing on High Rank NPCs</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_ecologist_disable_high_rank_fleeing">
+		<text>Disable Fleeing on High Rank NPCs</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_renegade_disable_high_rank_fleeing">
+		<text>Disable Fleeing on High Rank NPCs</text>
+	</string>
+
+	<string id="ui_mcm_menu_ecologist">
+		<text>Ecologist</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_ecologist_title">
+		<text>Ecologist</text>
+	</string>
+
+	<string id="ui_mcm_menu_monolith">
+		<text>Monolith</text>
 	</string>
 
 	<string id="ui_mcm_ztc_faction_monolith_title">
 		<text>Monolith</text>
+	</string>
+
+	<string id="ui_mcm_menu_renegade">
+		<text>Renegade</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_renegade_title">
+		<text>Renegade</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_renegade_start_with_companions">
+		<text>Start with companions</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_renegade_start_with_companions_desc">
+		<text>When starting a new game as Renegades, spawn companions near you after a short delay. Requires the vanilla Companion system to be enabled. Does not apply to existing saves.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_renegade_start_with_companions_count">
+		<text>Starting companion count</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_renegade_paid_escort_enabled">
+		<text>Contract-only escort</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_renegade_paid_escort_enabled_desc">
+		<text>Renegade squad commanders can only be hired on timed contracts (24h / 48h). Goodwill does not grant free companionship — payment is required at neutral or friend relation.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_renegade_paid_escort_price_24h">
+		<text>24h escort base price (RU)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_renegade_paid_escort_price_24h_desc">
+		<text>Base ruble cost for a 24-hour contract (experienced commander, 1 squad member). Final price scales with commander rank and squad size (+100% per extra member). Vanilla reference: 1500.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_renegade_paid_escort_price_48h">
+		<text>48h escort base price (RU)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_renegade_paid_escort_price_48h_desc">
+		<text>Base ruble cost for a 48-hour contract (experienced commander, 1 squad member). Final price scales with commander rank and squad size (+100% per extra member). Vanilla reference: 3000.</text>
 	</string>
 
 	<string id="ui_mcm_menu_sin">
@@ -32,12 +380,40 @@
 		<text>SiN</text>
 	</string>
 
+	<string id="ui_mcm_ztc_faction_sin_disable_fleeing">
+		<text>Disable Fleeing</text>
+	</string>
+
+	<string id="ui_mcm_menu_isg">
+		<text>UNISG</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_isg_title">
+		<text>UNISG</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_isg_start_with_companions">
+		<text>Start with companions</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_isg_start_with_companions_desc">
+		<text>When starting a new game as UNISG, spawn companions near you after a short delay. Requires the vanilla Companion system to be enabled. Does not apply to existing saves.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_isg_start_with_companions_count">
+		<text>Starting companion count</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_isg_disable_fleeing">
+		<text>Disable Fleeing</text>
+	</string>
+
 	<string id="ui_mcm_ztc_faction_monolith_psy_immunity">
 		<text>Monolith psy field immunity</text>
 	</string>
 
 	<string id="ui_mcm_ztc_faction_monolith_easier_companion_recruit">
-		<text>Easier Companion Recruitment</text>
+		<text>True Monolith Brotherhood</text>
 	</string>
 
 	<string id="ui_mcm_ztc_faction_monolith_easier_companion_recruit_desc">
@@ -56,8 +432,16 @@
 		<text>Damage reduction from melee, cuts, and explosions for Monolith stalkers (0-50%)</text>
 	</string>
 
+	<string id="ui_mcm_ztc_faction_monolith_rupture_resistance_actor_enabled">
+		<text>Player rupture resistance</text>
+	</string>
+
 	<string id="ui_mcm_ztc_faction_monolith_rupture_resistance_actor">
 		<text>Player rupture resistance (%)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_monolith_rupture_resistance_npc_enabled">
+		<text>Monolith NPC rupture resistance</text>
 	</string>
 
 	<string id="ui_mcm_ztc_faction_monolith_rupture_resistance_npc">
@@ -69,7 +453,7 @@
 	</string>
 
 	<string id="ui_mcm_ztc_faction_sin_mutant_alliance_enabled_desc">
-		<text>SiN stalkers ignore wild mutants unless you attack them. Hostility is remembered for 6 in-game hours.</text>
+		<text>SiN stalkers ignore wild mutants unless you attack them. Hostility is remembered for 6 in-game hours. While enabled, SiN mutant-hunting tasks are not offered (including stored DRX tasks).</text>
 	</string>
 
 	<string id="ui_mcm_ztc_faction_sin_max_companions">
@@ -113,7 +497,7 @@
 	</string>
 
 	<string id="ui_mcm_ztc_faction_force_shield_actor_enabled_desc">
-		<text>Grants the Cicatrix artifact to SiN players, reduces bullet damage while charged, and recharges over time.</text>
+		<text>Grants the Cicatrix artifact to SiN players. Full bullet damage reduction while charge is above 0%; hits drain charge. Recharges over time.</text>
 	</string>
 
 	<string id="ui_mcm_ztc_faction_force_shield_npc_enabled">
@@ -150,5 +534,10 @@
 
 	<string id="ui_mcm_ztc_faction_force_shield_debug_log">
 		<text>Force Shield debug log</text>
+	</string>
+
+	<!-- Overrides vanilla paid escort offer (ZTC removes north/underground dismiss restriction). -->
+	<string id="st_paid_companion_dialog_text_1">
+		<text>For an upfront payment I will protect you. I want %s for joining you for 24 hours, %s for 48 hours.</text>
 	</string>
 </string_table>

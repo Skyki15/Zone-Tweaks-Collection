@@ -1,0 +1,285 @@
+-- Faction-specific combat flee/retreat disable (full-faction and high-rank-only toggles).
+
+_G.ztc_faction_disable_fleeing = _G.ztc_faction_disable_fleeing or {}
+local mod = _G.ztc_faction_disable_fleeing
+
+local ZTC_EVID_BLOCK_FLEE = xr_evaluators_id.peace_sh_base + 15
+local PANIC_THRESHOLD_NO_FLEE = 0
+local flee_retry_tick = {}
+
+local COMMUNITY_FLEE_ALL_CONFIG = {
+	dolg = "dolg_disable_fleeing",
+	killer = "mercenary_disable_fleeing",
+	army = "military_disable_fleeing",
+	greh = "sin_disable_fleeing",
+	actor_greh = "sin_disable_fleeing",
+	isg = "isg_disable_fleeing",
+}
+
+local COMMUNITY_HIGH_RANK_FLEE_CONFIG = {
+	stalker = "loners_disable_high_rank_fleeing",
+	bandit = "bandits_disable_high_rank_fleeing",
+	csky = "csky_disable_high_rank_fleeing",
+	freedom = "freedom_disable_high_rank_fleeing",
+	ecolog = "ecologist_disable_high_rank_fleeing",
+	renegade = "renegade_disable_high_rank_fleeing",
+}
+
+local HIGH_RANK_NAMES = {
+	veteran = true,
+	expert = true,
+	master = true,
+	legend = true,
+}
+
+function mod.is_actor_npc(npc)
+	if not npc then
+		return false
+	end
+
+	if utils_obj and utils_obj.is_actor then
+		return utils_obj.is_actor(npc)
+	end
+
+	return npc:id() == AC_ID
+end
+
+function mod.is_valid_stalker_npc(npc)
+	if not npc then
+		return false
+	end
+
+	if not IsStalker(npc) or mod.is_actor_npc(npc) then
+		return false
+	end
+
+	return npc.alive and npc:alive()
+end
+
+function mod.get_npc_community(npc)
+	if not npc then
+		return nil
+	end
+
+	if character_community then
+		return character_community(npc)
+	end
+
+	return nil
+end
+
+function mod.is_flee_toggle_enabled(config_key)
+	if not config_key then
+		return false
+	end
+
+	if ztc_faction_mcm and ztc_faction_mcm.is_enabled and not ztc_faction_mcm.is_enabled() then
+		return false
+	end
+
+	if ztc_faction_mcm and ztc_faction_mcm.get_config then
+		return ztc_faction_mcm.get_config(config_key) == true
+	end
+
+	return false
+end
+
+function mod.is_high_rank(npc)
+	if not (ranks and ranks.get_obj_rank_name) then
+		return false
+	end
+
+	local rank_name = ranks.get_obj_rank_name(npc)
+	return rank_name ~= nil and HIGH_RANK_NAMES[rank_name] == true
+end
+
+function mod.any_flee_toggle_enabled()
+	if ztc_faction_mcm and ztc_faction_mcm.is_enabled and not ztc_faction_mcm.is_enabled() then
+		return false
+	end
+
+	for _, config_key in pairs(COMMUNITY_FLEE_ALL_CONFIG) do
+		if mod.is_flee_toggle_enabled(config_key) then
+			return true
+		end
+	end
+
+	for _, config_key in pairs(COMMUNITY_HIGH_RANK_FLEE_CONFIG) do
+		if mod.is_flee_toggle_enabled(config_key) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function mod.should_disable_flee(npc)
+	if not mod.any_flee_toggle_enabled() then
+		return false
+	end
+
+	if not mod.is_valid_stalker_npc(npc) then
+		return false
+	end
+
+	local com = mod.get_npc_community(npc)
+
+	local all_flee_key = com and COMMUNITY_FLEE_ALL_CONFIG[com]
+	if all_flee_key and mod.is_flee_toggle_enabled(all_flee_key) then
+		return true
+	end
+
+	local high_rank_flee_key = com and COMMUNITY_HIGH_RANK_FLEE_CONFIG[com]
+	if high_rank_flee_key
+		and mod.is_flee_toggle_enabled(high_rank_flee_key)
+		and mod.is_high_rank(npc) then
+		return true
+	end
+
+	return false
+end
+
+function mod.should_restore_flee_defaults(npc)
+	if not mod.is_valid_stalker_npc(npc) then
+		return false
+	end
+
+	local npc_storage = db.storage[npc:id()]
+	if not (npc_storage and npc_storage.ztc_faction_retreat_blocked) then
+		return false
+	end
+
+	return not mod.should_disable_flee(npc)
+end
+
+function mod.block_retreat_action(npc)
+	if not mod.is_valid_stalker_npc(npc) then
+		return false
+	end
+
+	local mgr = npc:motivation_action_manager()
+	if not (mgr and mgr.initialized and mgr:initialized()) then
+		return false
+	end
+
+	local npc_id = npc:id()
+	local npc_storage = db.storage[npc_id]
+	if npc_storage and npc_storage.ztc_faction_retreat_blocked then
+		return true
+	end
+
+	local retreat = mgr:action(stalker_ids.action_retreat_from_enemy)
+	if not retreat then
+		return false
+	end
+
+	mgr:add_evaluator(ZTC_EVID_BLOCK_FLEE, property_evaluator_const(false))
+	retreat:add_precondition(world_property(ZTC_EVID_BLOCK_FLEE, true))
+
+	db.storage[npc_id] = db.storage[npc_id] or {}
+	db.storage[npc_id].ztc_faction_retreat_blocked = true
+	return true
+end
+
+function mod.apply_flee_disable(npc)
+	if not mod.should_disable_flee(npc) then
+		return
+	end
+
+	if npc.set_custom_panic_threshold then
+		npc:set_custom_panic_threshold(PANIC_THRESHOLD_NO_FLEE)
+	end
+
+	mod.block_retreat_action(npc)
+end
+
+function mod.restore_flee_defaults(npc)
+	if not mod.is_valid_stalker_npc(npc) then
+		return
+	end
+
+	if npc.set_default_panic_threshold then
+		npc:set_default_panic_threshold()
+	end
+
+	local npc_storage = db.storage[npc:id()]
+	if npc_storage then
+		npc_storage.ztc_faction_retreat_blocked = nil
+	end
+end
+
+function mod.on_npc_net_spawn(npc, se_obj)
+	if not mod.any_flee_toggle_enabled() then
+		return
+	end
+
+	if not mod.is_valid_stalker_npc(npc) then
+		return
+	end
+
+	mod.apply_flee_disable(npc)
+end
+
+function mod.on_npc_update(npc)
+	if not mod.any_flee_toggle_enabled() then
+		return
+	end
+
+	if mod.should_restore_flee_defaults(npc) then
+		mod.restore_flee_defaults(npc)
+		return
+	end
+
+	if not mod.should_disable_flee(npc) then
+		return
+	end
+
+	local npc_id = npc:id()
+	local npc_storage = db.storage[npc_id]
+	if npc_storage and npc_storage.ztc_faction_retreat_blocked then
+		return
+	end
+
+	local now = time_global()
+	if flee_retry_tick[npc_id] and now < flee_retry_tick[npc_id] then
+		return
+	end
+	flee_retry_tick[npc_id] = now + 500
+
+	mod.apply_flee_disable(npc)
+end
+
+function mod.on_npc_death(npc, who)
+	if not npc then
+		return
+	end
+	flee_retry_tick[npc:id()] = nil
+end
+
+function mod.refresh_for_all()
+	if not (db and db.storage) then
+		return
+	end
+
+	for id, npc_storage in pairs(db.storage) do
+		local npc = npc_storage and npc_storage.object
+		if mod.is_valid_stalker_npc(npc) then
+			if mod.should_disable_flee(npc) then
+				mod.apply_flee_disable(npc)
+			else
+				mod.restore_flee_defaults(npc)
+			end
+		end
+	end
+end
+
+function mod.on_option_change(mcm)
+	mod.refresh_for_all()
+end
+
+function on_game_start()
+	RegisterScriptCallback("npc_on_net_spawn", mod.on_npc_net_spawn)
+	RegisterScriptCallback("npc_on_update", mod.on_npc_update)
+	RegisterScriptCallback("npc_on_death_callback", mod.on_npc_death)
+	RegisterScriptCallback("on_option_change", mod.on_option_change)
+end

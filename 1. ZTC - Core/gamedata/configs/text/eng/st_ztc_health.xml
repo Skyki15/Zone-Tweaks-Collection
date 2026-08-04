@@ -53,11 +53,11 @@
 	</string>
 
 	<string id="ui_mcm_ztc_health_stalkers_desc">
-		<text>Stalker health multiplier by rank (0.25x - 3.0x). Values above 1.0 reduce incoming damage; values below 1.0 spawn with reduced health.</text>
+		<text>Stalker health multiplier by rank (0.25x - 3.0x). Scales max health on spawn: values above 1.0 increase HP; values below 1.0 reduce HP.</text>
 	</string>
 
 	<string id="ui_mcm_ztc_health_mutants_desc">
-		<text>Mutant health multiplier by species (0.25x - 3.0x). Values above 1.0 reduce incoming damage; values below 1.0 spawn with reduced health.</text>
+		<text>Mutant health multiplier by species (0.25x - 3.0x). Scales max health on spawn: values above 1.0 increase HP; values below 1.0 reduce HP.</text>
 	</string>
 
 	<string id="ui_mcm_ztc_health_rank_novice">
@@ -90,6 +90,62 @@
 
 	<string id="ui_mcm_ztc_health_rank_legend">
 		<text>Legendary</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_factions_desc">
+		<text>Faction health multiplier (0.25x - 3.0x). Stacks with the rank multiplier above. Scales max health on spawn: values above 1.0 increase HP; values below 1.0 reduce HP.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_stalker">
+		<text>Loners</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_bandit">
+		<text>Bandits</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_csky">
+		<text>Clear Sky</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_dolg">
+		<text>Duty</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_freedom">
+		<text>Freedom</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_killer">
+		<text>Mercenaries</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_army">
+		<text>Military</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_ecolog">
+		<text>Ecologist</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_monolith">
+		<text>Monolith</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_renegade">
+		<text>Renegade</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_greh">
+		<text>SiN</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_isg">
+		<text>UNISG</text>
+	</string>
+
+	<string id="ui_mcm_ztc_health_faction_zombied">
+		<text>Zombified Stalkers</text>
 	</string>
 
 	<string id="ui_mcm_ztc_health_species_dog">

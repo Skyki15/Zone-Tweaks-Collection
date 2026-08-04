@@ -3,6 +3,116 @@ local HOSTILITY_TTL_MS = 21600000
 local HOSTILITY_PRUNE_INTERVAL_MS = 60000
 local hostile_mutants = {}
 local next_prune_ts = 0
+local base_has_completed_task_prerequisites = nil
+local task_filter_installed = false
+
+local KNOWN_SIN_MUTANT_HUNT_TASKS = {
+	simulation_task_65 = true,
+	drx_sl_red_greh_tech_task_2 = true,
+}
+
+local function ztc_faction_alliance_task_ini()
+	return task_manager and task_manager.task_ini
+end
+
+local function ztc_faction_alliance_is_sin_task(task_id)
+	if not task_id then
+		return false
+	end
+
+	if KNOWN_SIN_MUTANT_HUNT_TASKS[task_id] then
+		return true
+	end
+
+	local ini = ztc_faction_alliance_task_ini()
+	if not ini or not ini:section_exist(task_id) then
+		return task_id:find("greh", 1, true) ~= nil
+	end
+
+	local sim_communities = ini:r_string_ex(task_id, "sim_communities")
+	if sim_communities and sim_communities:find("greh", 1, true) then
+		return true
+	end
+
+	return task_id:find("greh", 1, true) ~= nil
+end
+
+local function ztc_faction_alliance_is_monster_assault_task(task_id)
+	local ini = ztc_faction_alliance_task_ini()
+	if not ini or not ini:section_exist(task_id) then
+		return false
+	end
+
+	if ini:r_string_ex(task_id, "status_functor") ~= "assault_task_status_functor" then
+		return false
+	end
+
+	local params = ini:r_string_ex(task_id, "status_functor_params")
+	if not params or params == "" then
+		return false
+	end
+
+	local first = params:match("^%s*([^,%s]+)")
+	return first and first:find("^monster", 1) == 1
+end
+
+local function ztc_faction_alliance_is_blocked_mutant_hunt(task_id)
+	if not ztc_faction_utils.is_sin_mutant_alliance_enabled() or not task_id then
+		return false
+	end
+
+	if KNOWN_SIN_MUTANT_HUNT_TASKS[task_id] then
+		return true
+	end
+
+	return ztc_faction_alliance_is_sin_task(task_id)
+		and ztc_faction_alliance_is_monster_assault_task(task_id)
+end
+
+local function ztc_faction_alliance_install_task_filter()
+	if task_filter_installed then
+		return
+	end
+
+	if not (xr_conditions and xr_conditions.has_completed_task_prerequisites) then
+		return
+	end
+
+	base_has_completed_task_prerequisites = xr_conditions.has_completed_task_prerequisites
+	function xr_conditions.has_completed_task_prerequisites(actor, npc, p)
+		if p and p[1] and ztc_faction_alliance_is_blocked_mutant_hunt(p[1]) then
+			return false
+		end
+
+		return base_has_completed_task_prerequisites(actor, npc, p)
+	end
+
+	task_filter_installed = true
+end
+
+local function ztc_faction_alliance_purge_blocked_tasks()
+	if not ztc_faction_utils.is_sin_mutant_alliance_enabled() then
+		return
+	end
+
+	if not (task_manager and task_manager.get_task_manager) then
+		return
+	end
+
+	local tm = task_manager.get_task_manager()
+	if not tm or not tm.task_info or not tm.set_task_failed then
+		return
+	end
+
+	for task_id, info in pairs(tm.task_info) do
+		if ztc_faction_alliance_is_blocked_mutant_hunt(task_id) and info then
+			local status = info.status
+			if status and status ~= "completed" and status ~= "fail" then
+				tm:set_task_failed(task_id)
+			end
+		end
+	end
+end
 
 local function ztc_faction_alliance_is_stalker_monster_pair(a, b)
 	return IsStalker(a) and IsMonster(b)
@@ -139,7 +249,7 @@ function ztc_faction_alliance_on_enemy_eval(npc, enemy, flags)
 	local now = time_global()
 	if now >= next_prune_ts then
 		ztc_faction_alliance_prune_memory(now)
-		next_prune_ts = now + HOSTILITY_PRUNE_INTERVAL_MS
+		next_prune_ts = now + ztc_faction_utils.sim_interval_ms(HOSTILITY_PRUNE_INTERVAL_MS)
 	end
 
 	if ztc_faction_alliance_is_hostile(npc, now) or ztc_faction_alliance_is_hostile(enemy, now) then
@@ -163,7 +273,7 @@ function ztc_faction_alliance_load_state(mdata)
 	end
 
 	ztc_faction_alliance_prune_memory(time_global())
-	next_prune_ts = time_global() + HOSTILITY_PRUNE_INTERVAL_MS
+	next_prune_ts = time_global() + ztc_faction_utils.sim_interval_ms(HOSTILITY_PRUNE_INTERVAL_MS)
 end
 
 function ztc_faction_sin_alliance_is_hostile_mutant(obj, now)
@@ -174,12 +284,21 @@ function ztc_faction_sin_alliance_is_hostile_mutant(obj, now)
 	return ztc_faction_alliance_is_hostile(obj, now or time_global())
 end
 
+function ztc_faction_sin_alliance_on_option_change()
+	ztc_faction_alliance_install_task_filter()
+	ztc_faction_alliance_purge_blocked_tasks()
+end
+
 function on_game_start()
 	_G.ztc_faction_sin_alliance = _G.ztc_faction_sin_alliance or {}
 	_G.ztc_faction_sin_alliance.is_hostile_mutant = ztc_faction_sin_alliance_is_hostile_mutant
+
+	ztc_faction_alliance_install_task_filter()
+	ztc_faction_alliance_purge_blocked_tasks()
 
 	RegisterScriptCallback("on_enemy_eval", ztc_faction_alliance_on_enemy_eval)
 	RegisterScriptCallback("monster_on_before_hit", ztc_faction_alliance_monster_on_before_hit)
 	RegisterScriptCallback("save_state", ztc_faction_alliance_save_state)
 	RegisterScriptCallback("load_state", ztc_faction_alliance_load_state)
+	RegisterScriptCallback("on_option_change", ztc_faction_sin_alliance_on_option_change)
 end

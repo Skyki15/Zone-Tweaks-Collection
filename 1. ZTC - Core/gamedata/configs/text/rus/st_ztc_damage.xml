@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="windows-1251" standalone="yes" ?>
+<string_table>
+	<string id="ui_mcm_menu_damage_tweaks">
+		<text>Твики урона</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_title">
+		<text>Твики урона</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_enabled">
+		<text>Включить масштабирование урона мутантов</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_info_desc">
+		<text>Только для игрока: масштабирует урон, который мутанты наносят вам (ближний бой, пси, метание и т. д.). Не меняет урон вашего оружия по мутантам. Изменения применяются к новым попаданиям сразу.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_ballistics_enabled">
+		<text>Включить иммерсивную баллистику</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_ballistics_desc">
+		<text>Требует Immersive Ballistic System (16a). Переключает пробитие, замедление на дистанции и глобальное масштабирование урона от пуль. Баланс предполагает множитель урона сложности 1,0 - при включении сбрасывает множитель до 1,0 при загрузке и в MCM, если в сохранении было другое значение. Изменения применяются сразу; DLTX боеприпасов/костюмов всё ещё загружаются при установленном моде.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_mutants_title">
+		<text>Урон мутантов</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_mutants_desc">
+		<text>Урон игроку по видам (0,25x-3,0x)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_dog">
+		<text>Слепой пёс</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_flesh">
+		<text>Плоть</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_bloodsucker">
+		<text>Кровосос</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_boar">
+		<text>Кабан</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_burer">
+		<text>Бюрер</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_cat">
+		<text>Кошка</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_controller">
+		<text>Контролёр</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_fracture">
+		<text>Излом</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_karlik">
+		<text>Карлик</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_pseudodog">
+		<text>Псевдособака</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_pseudo_gigant">
+		<text>Псевдогигант</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_snork">
+		<text>Снорк</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_tushkano">
+		<text>Тушкан</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_zombie">
+		<text>Зомби</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_lurker">
+		<text>Люркер</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_psysucker">
+		<text>Псисос</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_chimera">
+		<text>Химера</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_poltergeist">
+		<text>Полтергейст</text>
+	</string>
+
+	<string id="ui_mcm_ztc_damage_species_rat">
+		<text>Крыса / Родент</text>
+	</string>
+
+</string_table>

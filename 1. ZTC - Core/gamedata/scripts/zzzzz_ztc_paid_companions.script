@@ -1,0 +1,757 @@
+-- Zone Tweaks Collection — paid escort recruitment tweaks (zzzzz_ prefix loads after txr_paid_companions).
+-- Loner / Freedom blocking and Merc / Bandit / Renegade pricing use Faction Tweaks MCM.
+-- Mercenaries and Renegades: payment-only escort (no free goodwill recruitment).
+-- Bandits: paid escort optional; vanilla high-goodwill free recruitment preserved.
+-- Paid escort may be hired and kept in northern / underground blacklisted maps (vanilla restriction removed).
+
+local VANILLA_BASE_24 = 1500
+local VANILLA_BASE_48 = 3000
+
+local competency_patch_installed = false
+local faction_patch_installed = false
+local ztc_guard_period = nil
+local ztc_wrapped_is_squad_competent = nil
+local ztc_wrapped_is_squad_not_competent = nil
+local ztc_squad_price_mult = {}
+
+local function install_paid_escort_level_dismiss_block()
+	if _G._ztc_paid_escort_register_hook_installed then
+		return
+	end
+
+	local reg_orig = RegisterScriptCallback
+	RegisterScriptCallback = function(name, func_or_userdata)
+		if name == "on_level_changing" and type(func_or_userdata) == "function" then
+			local info = debug.getinfo(func_or_userdata, "S")
+			if info and info.source and string.find(info.source, "txr_paid_companions", 1, true) then
+				return
+			end
+		end
+		return reg_orig(name, func_or_userdata)
+	end
+
+	_G._ztc_paid_escort_register_hook_installed = true
+end
+
+install_paid_escort_level_dismiss_block()
+
+local function bind_dangerous_map_bypass()
+	if not txr_paid_companions then
+		return
+	end
+
+	function txr_paid_companions.is_not_dangerous_map(actor, npc)
+		return true
+	end
+end
+
+local function is_paid_escort_always_available()
+	if ui_mcm then
+		local val = ui_mcm.get("ztc/faction_tweaks/settings/paid_escort_always_available")
+		if val ~= nil then
+			return val == true
+		end
+	end
+	return true
+end
+
+local function get_npc_community(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	if not who then
+		return nil
+	end
+	return character_community(who) or ""
+end
+
+local function is_vanilla_payment_recruitment_blocked(comm)
+	if comm == "stalker" then
+		return ztc_faction_mcm
+			and ztc_faction_mcm.is_vanilla_payment_recruitment_disabled
+			and ztc_faction_mcm.is_vanilla_payment_recruitment_disabled("loners")
+	end
+	if comm == "freedom" then
+		return ztc_faction_mcm
+			and ztc_faction_mcm.is_vanilla_payment_recruitment_disabled
+			and ztc_faction_mcm.is_vanilla_payment_recruitment_disabled("freedom")
+	end
+	return false
+end
+
+local function read_mcm_bool(path, fallback)
+	if ztc_faction_mcm and ztc_faction_mcm.get_raw_mcm_value then
+		local key = path:match("/([^/]+)$")
+		if key then
+			local val = ztc_faction_mcm.get_raw_mcm_value(key)
+			if val ~= nil then
+				return val == true
+			end
+		end
+	end
+	if ui_mcm then
+		local val = ui_mcm.get(path)
+		if val ~= nil then
+			return val == true
+		end
+	end
+	return fallback
+end
+
+local function read_mcm_number(path, fallback)
+	if ztc_faction_mcm and ztc_faction_mcm.get_raw_mcm_value then
+		local key = path:match("/([^/]+)$")
+		if key then
+			local val = ztc_faction_mcm.get_raw_mcm_value(key)
+			if val ~= nil then
+				return tonumber(val) or fallback
+			end
+		end
+	end
+	if ui_mcm then
+		local val = ui_mcm.get(path)
+		if val ~= nil then
+			return tonumber(val) or fallback
+		end
+	end
+	return fallback
+end
+
+local MCM_MERCENARY_ROOT = "ztc/faction_tweaks/mercenary/"
+local MCM_BANDIT_ROOT = "ztc/faction_tweaks/bandits/"
+local MCM_RENEGADE_ROOT = "ztc/faction_tweaks/renegade/"
+
+local function is_mercenary_paid_escort_enabled()
+	return read_mcm_bool(MCM_MERCENARY_ROOT .. "mercenary_paid_escort_enabled", true)
+end
+
+local function is_bandit_paid_escort_enabled()
+	return read_mcm_bool(MCM_BANDIT_ROOT .. "bandit_paid_escort_enabled", true)
+end
+
+local function is_renegade_paid_escort_enabled()
+	return read_mcm_bool(MCM_RENEGADE_ROOT .. "renegade_paid_escort_enabled", false)
+end
+
+local function blocks_goodwill_free_recruitment(comm)
+	if comm == "killer" then
+		return is_mercenary_paid_escort_enabled()
+	end
+	if comm == "renegade" then
+		return is_renegade_paid_escort_enabled()
+	end
+	return false
+end
+
+local function allows_paid_escort_relation(npc)
+	if not npc then
+		return false
+	end
+
+	local rel = npc:relation(db.actor)
+	return rel == game_object.neutral or rel == game_object.friend
+end
+
+local function allows_paid_escort_squad(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	if not who then
+		return false
+	end
+
+	local squad = get_object_squad(who)
+	if not squad then
+		return false
+	end
+
+	if axr_companions and not axr_companions.allow_simulation_squads_as_companions then
+		return false
+	end
+
+	return allows_paid_escort_relation(who)
+end
+
+local function get_max_actor_companion_slots()
+	local max_size = axr_companions and axr_companions.max_actor_squad_size or 2
+	if game_achievements and game_achievements.has_achievement("patriarch") then
+		max_size = max_size + 2
+	end
+	return max_size
+end
+
+local function is_actor_companion_party_full()
+	if not axr_companions or not axr_companions.get_companion_count then
+		return false
+	end
+	return axr_companions.get_companion_count() >= get_max_actor_companion_slots()
+end
+
+local function get_mcm_price_bases(comm)
+	local base24 = VANILLA_BASE_24
+	local base48 = VANILLA_BASE_48
+
+	if comm == "killer" then
+		base24 = read_mcm_number(MCM_MERCENARY_ROOT .. "mercenary_paid_escort_price_24h", base24)
+		base48 = read_mcm_number(MCM_MERCENARY_ROOT .. "mercenary_paid_escort_price_48h", base48)
+	elseif comm == "bandit" then
+		base24 = read_mcm_number(MCM_BANDIT_ROOT .. "bandit_paid_escort_price_24h", base24)
+		base48 = read_mcm_number(MCM_BANDIT_ROOT .. "bandit_paid_escort_price_48h", base48)
+	elseif comm == "renegade" then
+		base24 = read_mcm_number(MCM_RENEGADE_ROOT .. "renegade_paid_escort_price_24h", base24)
+		base48 = read_mcm_number(MCM_RENEGADE_ROOT .. "renegade_paid_escort_price_48h", base48)
+	end
+
+	return base24, base48
+end
+
+local function uses_custom_pricing(comm)
+	if comm == "killer" then
+		return is_mercenary_paid_escort_enabled()
+	end
+	if comm == "bandit" then
+		return is_bandit_paid_escort_enabled()
+	end
+	if comm == "renegade" then
+		return is_renegade_paid_escort_enabled()
+	end
+	return false
+end
+
+local RANK_PRICE_MULT = {
+	novice       = 0.80,
+	trainee      = 0.90,
+	experienced  = 1.00,
+	professional = 1.15,
+	veteran      = 1.35,
+	expert       = 1.55,
+	master       = 1.80,
+	legend       = 2.10,
+}
+
+local MEMBER_COUNT_STEP_MULT = 1.0
+
+local function get_commander_rank_mult(npc)
+	if not npc then
+		return 1.0
+	end
+
+	if ranks and ranks.get_obj_rank_name then
+		local rank_name = ranks.get_obj_rank_name(npc)
+		if rank_name and RANK_PRICE_MULT[rank_name] then
+			return RANK_PRICE_MULT[rank_name]
+		end
+	end
+
+	return 1.0
+end
+
+local function get_squad_member_count(squad)
+	local count = 0
+	if squad then
+		for _ in squad:squad_members() do
+			count = count + 1
+		end
+	end
+	return math.max(count, 1)
+end
+
+local function get_member_count_mult(member_count)
+	if member_count <= 1 then
+		return 1.0
+	end
+	return 1.0 + (member_count - 1) * MEMBER_COUNT_STEP_MULT
+end
+
+local function calculate_escort_price_mult(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	if not who then
+		return 1.0
+	end
+
+	local squad = get_object_squad(who)
+	if not squad then
+		return get_commander_rank_mult(who)
+	end
+
+	local rank_mult = get_commander_rank_mult(who)
+	local member_mult = get_member_count_mult(get_squad_member_count(squad))
+	return rank_mult * member_mult
+end
+
+local function cache_squad_price_mult(actor, npc)
+	local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+	if not who then
+		return
+	end
+
+	local squad = get_object_squad(who)
+	if not squad then
+		return
+	end
+
+	if ztc_squad_price_mult[squad.id] then
+		return
+	end
+
+	ztc_squad_price_mult[squad.id] = calculate_escort_price_mult(actor, npc)
+end
+
+local function get_squad_price_mult(actor, npc)
+	cache_squad_price_mult(actor, npc)
+
+	local who = dialogs.who_is_npc(actor, npc)
+	local squad = who and get_object_squad(who)
+	if squad and ztc_squad_price_mult[squad.id] then
+		return ztc_squad_price_mult[squad.id]
+	end
+
+	return 1
+end
+
+local function get_custom_escort_price(actor, npc, contract)
+	local comm = get_npc_community(actor, npc)
+	if not uses_custom_pricing(comm) then
+		return nil
+	end
+
+	local mult = get_squad_price_mult(actor, npc)
+	local base24, base48 = get_mcm_price_bases(comm)
+	local base = (contract == 1) and base24 or base48
+
+	return math.floor(mult * base + 0.5)
+end
+
+local function strip_paid_escort_map_warning(text)
+	if not text then
+		return text
+	end
+
+	text = text:gsub("%.%s*Be warned that if you are travelling[^%?]*%?", ".")
+	text = text:gsub("\nЧто до условий.-Если заинтересован", "\nЕсли заинтересован")
+	return text
+end
+
+local function ensure_vanilla_competent_base()
+	if not txr_paid_companions then
+		return
+	end
+	if txr_paid_companions._ztc_base_is_squad_competent then
+		return
+	end
+	local candidate = txr_paid_companions.is_squad_competent or _G.is_squad_competent
+	if candidate and candidate ~= ztc_wrapped_is_squad_competent then
+		txr_paid_companions._ztc_base_is_squad_competent = candidate
+	end
+end
+
+local function apply_custom_guard_period(actor, npc, period)
+	if not period then
+		return false
+	end
+
+	ensure_vanilla_competent_base()
+	local base_competent = txr_paid_companions._ztc_base_is_squad_competent
+	if base_competent then
+		pcall(base_competent, actor, npc)
+	end
+
+	local contract = (period == 2 * 24 * 60 * 60) and 2 or 1
+	local base_take = contract == 1
+		and txr_paid_companions._ztc_base_take_guard_money_1
+		or txr_paid_companions._ztc_base_take_guard_money_2
+	if not base_take then
+		return false
+	end
+
+	local orig_relocate = dialogs.relocate_money_from_actor
+	dialogs.relocate_money_from_actor = function()
+		-- Custom ZTC pricing already charged the actor.
+	end
+	local ok = pcall(base_take, actor, npc)
+	dialogs.relocate_money_from_actor = orig_relocate
+	return ok
+end
+
+local PRICE_PATCH_NAMES = {
+	"have_guard_money_1",
+	"have_guard_money_2",
+	"take_guard_money_1",
+	"take_guard_money_2",
+	"st_paid_companion_dialog_text_1",
+	"st_paid_companion_dialog_text_3",
+	"st_paid_companion_dialog_text_4",
+	"register_paid_companion",
+}
+
+local function init_price_patch_bases()
+	if not txr_paid_companions then
+		return false
+	end
+
+	local wrapped_any = false
+
+	for i = 1, #PRICE_PATCH_NAMES do
+		local name = PRICE_PATCH_NAMES[i]
+		local base_key = "_ztc_base_" .. name
+		if not txr_paid_companions[base_key] then
+			local base = txr_paid_companions[name]
+			if base then
+				txr_paid_companions[base_key] = base
+				wrapped_any = true
+			end
+		else
+			wrapped_any = true
+		end
+	end
+
+	if wrapped_any then
+		txr_paid_companions._ztc_price_patches_installed = true
+	end
+
+	return wrapped_any
+end
+
+local function bind_price_wrappers()
+	if not txr_paid_companions or not init_price_patch_bases() then
+		return
+	end
+
+	function txr_paid_companions.have_guard_money_1(actor, npc)
+		local price = get_custom_escort_price(actor, npc, 1)
+		if price then
+			return mlr_utils.have_money(price)
+		end
+		return txr_paid_companions._ztc_base_have_guard_money_1(actor, npc)
+	end
+
+	function txr_paid_companions.have_guard_money_2(actor, npc)
+		local price = get_custom_escort_price(actor, npc, 2)
+		if price then
+			return mlr_utils.have_money(price)
+		end
+		return txr_paid_companions._ztc_base_have_guard_money_2(actor, npc)
+	end
+
+	function txr_paid_companions.take_guard_money_1(actor, npc)
+		local price = get_custom_escort_price(actor, npc, 1)
+		if price then
+			ensure_vanilla_competent_base()
+			local base_competent = txr_paid_companions._ztc_base_is_squad_competent
+			if base_competent then
+				pcall(base_competent, actor, npc)
+			end
+			ztc_guard_period = 1 * 24 * 60 * 60
+			dialogs.relocate_money_from_actor(actor, npc, price)
+			return
+		end
+		return txr_paid_companions._ztc_base_take_guard_money_1(actor, npc)
+	end
+
+	function txr_paid_companions.take_guard_money_2(actor, npc)
+		local price = get_custom_escort_price(actor, npc, 2)
+		if price then
+			ensure_vanilla_competent_base()
+			local base_competent = txr_paid_companions._ztc_base_is_squad_competent
+			if base_competent then
+				pcall(base_competent, actor, npc)
+			end
+			ztc_guard_period = 2 * 24 * 60 * 60
+			dialogs.relocate_money_from_actor(actor, npc, price)
+			return
+		end
+		return txr_paid_companions._ztc_base_take_guard_money_2(actor, npc)
+	end
+
+	function txr_paid_companions.st_paid_companion_dialog_text_1(actor, npc)
+		local comm = get_npc_community(actor, npc)
+		if uses_custom_pricing(comm) then
+			local money_1 = get_custom_escort_price(actor, npc, 1)
+			local money_2 = get_custom_escort_price(actor, npc, 2)
+			if money_1 and money_2 then
+				local str = game.translate_string("st_paid_companion_dialog_text_1")
+				return strformat(str, money_1, money_2)
+			end
+		end
+		return strip_paid_escort_map_warning(
+			txr_paid_companions._ztc_base_st_paid_companion_dialog_text_1(actor, npc)
+		)
+	end
+
+	function txr_paid_companions.st_paid_companion_dialog_text_3(actor, npc)
+		local price = get_custom_escort_price(actor, npc, 1)
+		if price then
+			local str = game.translate_string("st_paid_companion_dialog_text_3")
+			return strformat(str, price)
+		end
+		return txr_paid_companions._ztc_base_st_paid_companion_dialog_text_3(actor, npc)
+	end
+
+	function txr_paid_companions.st_paid_companion_dialog_text_4(actor, npc)
+		local price = get_custom_escort_price(actor, npc, 2)
+		if price then
+			local str = game.translate_string("st_paid_companion_dialog_text_4")
+			return strformat(str, price)
+		end
+		return txr_paid_companions._ztc_base_st_paid_companion_dialog_text_4(actor, npc)
+	end
+
+	function txr_paid_companions.register_paid_companion(actor, npc)
+		if ztc_guard_period then
+			local period = ztc_guard_period
+			ztc_guard_period = nil
+			apply_custom_guard_period(actor, npc, period)
+		end
+		return txr_paid_companions._ztc_base_register_paid_companion(actor, npc)
+	end
+end
+
+local function install_price_patches()
+	if not txr_paid_companions then
+		return false
+	end
+	return bind_price_wrappers()
+end
+
+local function sync_competency_globals()
+	if ztc_wrapped_is_squad_competent then
+		_G.is_squad_competent = ztc_wrapped_is_squad_competent
+		if txr_paid_companions then
+			txr_paid_companions.is_squad_competent = ztc_wrapped_is_squad_competent
+		end
+	end
+	if ztc_wrapped_is_squad_not_competent then
+		_G.is_squad_not_competent = ztc_wrapped_is_squad_not_competent
+		if txr_paid_companions then
+			txr_paid_companions.is_squad_not_competent = ztc_wrapped_is_squad_not_competent
+		end
+	end
+end
+
+local function install_competency_patch()
+	if not txr_paid_companions then
+		return false
+	end
+
+	local base_competent = txr_paid_companions._ztc_base_is_squad_competent
+	if not base_competent then
+		local current = txr_paid_companions.is_squad_competent or _G.is_squad_competent
+		if current and current ~= ztc_wrapped_is_squad_competent then
+			base_competent = current
+		end
+		if not base_competent then
+			return false
+		end
+		txr_paid_companions._ztc_base_is_squad_competent = base_competent
+	end
+
+	if not ztc_wrapped_is_squad_competent then
+		ztc_wrapped_is_squad_competent = function(actor, npc)
+			if is_actor_companion_party_full() then
+				return false
+			end
+
+			cache_squad_price_mult(actor, npc)
+			return true
+		end
+
+		ztc_wrapped_is_squad_not_competent = function(actor, npc)
+			return not ztc_wrapped_is_squad_competent(actor, npc)
+		end
+	end
+
+	sync_competency_globals()
+	txr_paid_companions._ztc_competency_patch_installed = true
+	competency_patch_installed = true
+	return true
+end
+
+local function bind_competency_wrappers()
+	if not ztc_wrapped_is_squad_competent then
+		return false
+	end
+
+	sync_competency_globals()
+
+	if txr_paid_companions then
+		txr_paid_companions.is_squad_competent = ztc_wrapped_is_squad_competent
+		txr_paid_companions.is_squad_not_competent = ztc_wrapped_is_squad_not_competent
+	end
+
+	return true
+end
+
+local function install_paid_escort_room_bypass_patch()
+	if txr_paid_companions._ztc_room_bypass_patch_installed then
+		return
+	end
+
+	if not (dialogs_axr_companion and dialogs_axr_companion.is_room_in_actor_squad) then
+		return
+	end
+
+	dialogs_axr_companion._ztc_base_is_room_in_actor_squad = dialogs_axr_companion.is_room_in_actor_squad
+
+	function dialogs_axr_companion.is_room_in_actor_squad(actor, npc)
+		if txr_paid_companions and txr_paid_companions._ztc_paid_escort_dialog_active then
+			txr_paid_companions._ztc_paid_escort_dialog_active = false
+			return true
+		end
+
+		return dialogs_axr_companion._ztc_base_is_room_in_actor_squad(actor, npc)
+	end
+
+	txr_paid_companions._ztc_room_bypass_patch_installed = true
+end
+
+local function bind_free_recruitment_blocks()
+	if not txr_paid_companions then
+		return
+	end
+
+	if not txr_paid_companions._ztc_base_is_actor_natural then
+		local base_natural = txr_paid_companions.is_actor_natural
+		if base_natural then
+			txr_paid_companions._ztc_base_is_actor_natural = base_natural
+		end
+	end
+
+	if txr_paid_companions._ztc_base_is_actor_natural then
+		function txr_paid_companions.is_actor_natural(actor, npc)
+			local comm = get_npc_community(actor, npc)
+			if blocks_goodwill_free_recruitment(comm) then
+				return allows_paid_escort_squad(actor, npc)
+			end
+			return txr_paid_companions._ztc_base_is_actor_natural(actor, npc)
+		end
+	end
+
+	if dialogs_axr_companion and dialogs_axr_companion.is_actor_friend then
+		if not dialogs_axr_companion._ztc_base_is_actor_friend then
+			dialogs_axr_companion._ztc_base_is_actor_friend = dialogs_axr_companion.is_actor_friend
+		end
+
+		function dialogs_axr_companion.is_actor_friend(actor, npc)
+			local comm = get_npc_community(actor, npc)
+			if blocks_goodwill_free_recruitment(comm) then
+				return false
+			end
+			return dialogs_axr_companion._ztc_base_is_actor_friend(actor, npc)
+		end
+	end
+
+	if dialogs_axr_companion2 and dialogs_axr_companion2.is_actor_friend then
+		if not dialogs_axr_companion2._ztc_base_is_actor_friend then
+			dialogs_axr_companion2._ztc_base_is_actor_friend = dialogs_axr_companion2.is_actor_friend
+		end
+
+		function dialogs_axr_companion2.is_actor_friend(actor, npc)
+			local comm = get_npc_community(actor, npc)
+			if blocks_goodwill_free_recruitment(comm) then
+				return false
+			end
+			return dialogs_axr_companion2._ztc_base_is_actor_friend(actor, npc)
+		end
+	end
+end
+
+local function install_paid_companion_patch()
+	if competency_patch_installed and faction_patch_installed then
+		sync_competency_globals()
+		install_price_patches()
+		bind_competency_wrappers()
+		bind_free_recruitment_blocks()
+		bind_dangerous_map_bypass()
+		return true
+	end
+
+	install_price_patches()
+	bind_competency_wrappers()
+	bind_free_recruitment_blocks()
+	bind_dangerous_map_bypass()
+
+	local competency_ready = install_competency_patch()
+
+	if not (txr_paid_companions and txr_paid_companions.is_paid_companion_faction) then
+		return competency_ready
+	end
+
+	if not faction_patch_installed then
+		if not txr_paid_companions._ztc_base_is_paid_companion_faction then
+			txr_paid_companions._ztc_base_is_paid_companion_faction = txr_paid_companions.is_paid_companion_faction
+		end
+
+		function txr_paid_companions.is_paid_companion_faction(actor, npc)
+			local who = dialogs and dialogs.who_is_npc and dialogs.who_is_npc(actor, npc)
+			if not who then
+				return false
+			end
+
+			local comm = character_community(who) or ""
+			if is_vanilla_payment_recruitment_blocked(comm) then
+				return false
+			end
+
+			local enabled = false
+			if comm == "killer" then
+				enabled = is_mercenary_paid_escort_enabled()
+			elseif comm == "bandit" then
+				enabled = is_bandit_paid_escort_enabled()
+			elseif comm == "renegade" then
+				enabled = is_renegade_paid_escort_enabled()
+			else
+				enabled = txr_paid_companions._ztc_base_is_paid_companion_faction(actor, npc)
+			end
+
+			if enabled then
+				txr_paid_companions._ztc_paid_escort_dialog_active = true
+			end
+
+			return enabled
+		end
+
+		install_price_patches()
+		bind_free_recruitment_blocks()
+		install_paid_escort_room_bypass_patch()
+		faction_patch_installed = true
+	end
+
+	return competency_ready or install_competency_patch()
+end
+
+local function try_install_paid_companion_patch()
+	local result = install_paid_companion_patch()
+	bind_competency_wrappers()
+	bind_free_recruitment_blocks()
+	bind_dangerous_map_bypass()
+	return result
+end
+
+local function on_npc_use_repatch(npc, who)
+	if who and who:id() == AC_ID then
+		try_install_paid_companion_patch()
+	end
+end
+
+function on_game_start()
+	RegisterScriptCallback("actor_on_first_update", try_install_paid_companion_patch)
+	RegisterScriptCallback("on_game_load", try_install_paid_companion_patch)
+	RegisterScriptCallback("npc_on_use", on_npc_use_repatch)
+
+	CreateTimeEvent("ztc_paid_comp", "install_1", 0.1, function()
+		if try_install_paid_companion_patch() then
+			return true
+		end
+		return false
+	end)
+
+	CreateTimeEvent("ztc_paid_comp", "install_2", 1.0, function()
+		if try_install_paid_companion_patch() then
+			return true
+		end
+		return false
+	end)
+
+	CreateTimeEvent("ztc_paid_comp", "install_3", 5.0, function()
+		try_install_paid_companion_patch()
+		return true
+	end)
+end
+
+try_install_paid_companion_patch()
