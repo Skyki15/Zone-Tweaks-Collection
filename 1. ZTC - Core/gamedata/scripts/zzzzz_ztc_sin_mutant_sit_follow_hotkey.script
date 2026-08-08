@@ -1,0 +1,53 @@
+-- Zone Tweaks Collection — Sin: tamed mutant sit/follow hotkey.
+
+local SIT_FOLLOW_TARGET_DIST = 8.0
+local DEFAULT_HOTKEY_DIK = 45 -- DIK_X
+
+local function ztc_sin_sit_follow_get_hotkey_dik()
+	if ztc_faction_mcm and ztc_faction_mcm.get_raw_mcm_value then
+		local val = ztc_faction_mcm.get_raw_mcm_value("sin_companion_sit_follow_hotkey")
+		if type(val) == "number" then
+			return val
+		end
+	end
+
+	if DIK_keys and DIK_keys.DIK_X then
+		return DIK_keys.DIK_X
+	end
+
+	return DEFAULT_HOTKEY_DIK
+end
+
+local function ztc_sin_sit_follow_on_key_press(dik)
+	if dik ~= ztc_sin_sit_follow_get_hotkey_dik() then
+		return
+	end
+
+	if not ztc_faction_taming or not ztc_faction_taming.toggle_sit_follow then
+		return
+	end
+
+	if not ztc_faction_taming.can_use_sit_follow or not ztc_faction_taming.can_use_sit_follow() then
+		return
+	end
+
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid() then
+		return
+	end
+
+	local target = level.get_target_obj and level.get_target_obj()
+	if target and IsMonster(target) and ztc_faction_taming.is_tamed(target) then
+		local actor = db.actor
+		local dist = target:position():distance_to(actor:position())
+		if dist <= SIT_FOLLOW_TARGET_DIST then
+			ztc_faction_taming.toggle_sit_follow(target)
+			return
+		end
+	end
+
+	ztc_faction_taming.toggle_sit_follow(nil)
+end
+
+function on_game_start()
+	RegisterScriptCallback("on_key_press", ztc_sin_sit_follow_on_key_press)
+end

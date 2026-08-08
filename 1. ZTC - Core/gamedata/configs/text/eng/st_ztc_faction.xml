@@ -40,6 +40,18 @@
 		<text>ZTC: Failed to spawn starting companions. Check the log for errors.</text>
 	</string>
 
+	<string id="st_ztc_sin_start_blind_dog_pending">
+		<text>ZTC: Your blind dog companion is on its way...</text>
+	</string>
+
+	<string id="st_ztc_sin_start_blind_dog_spawned">
+		<text>ZTC: A tamed blind dog has joined you.</text>
+	</string>
+
+	<string id="st_ztc_sin_start_blind_dog_failed">
+		<text>ZTC: Failed to spawn starting blind dog. Check the log for errors.</text>
+	</string>
+
 	<string id="ui_mcm_ztc_faction_paid_escort_always_available">
 		<text>Always offer paid escort</text>
 	</string>
@@ -349,11 +361,11 @@
 	</string>
 
 	<string id="ui_mcm_ztc_faction_renegade_paid_escort_enabled">
-		<text>Contract-only escort</text>
+		<text>Paid escort recruitment</text>
 	</string>
 
 	<string id="ui_mcm_ztc_faction_renegade_paid_escort_enabled_desc">
-		<text>Renegade squad commanders can only be hired on timed contracts (24h / 48h). Goodwill does not grant free companionship — payment is required at neutral or friend relation.</text>
+		<text>Renegade squad commanders can be hired for timed paid escort (24h / 48h contracts). When you play as a Renegade, vanilla free recruitment at high goodwill is preserved — paid escort is an additional option. Other factions must pay.</text>
 	</string>
 
 	<string id="ui_mcm_ztc_faction_renegade_paid_escort_price_24h">
@@ -456,6 +468,22 @@
 		<text>SiN stalkers ignore wild mutants unless you attack them. Hostility is remembered for 6 in-game hours. While enabled, SiN mutant-hunting tasks are not offered (including stored DRX tasks).</text>
 	</string>
 
+	<string id="ui_mcm_ztc_faction_sin_start_with_blind_dog">
+		<text>Start with tamed Blind Dog</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_sin_start_with_blind_dog_desc">
+		<text>When starting a new game as Sin, spawn one tamed blind dog companion near you after a short delay. Does not apply to existing saves.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_sin_start_blind_dog_health">
+		<text>Starting blind dog health</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_sin_start_blind_dog_health_desc">
+		<text>Max-health multiplier for your starting tamed blind dog (1.25x-3.0x). 1.25x matches dog_strong baseline (25% above a normal dog). Higher values stack on top of that section.</text>
+	</string>
+
 	<string id="ui_mcm_ztc_faction_sin_max_companions">
 		<text>Max mutant companions (Sin)</text>
 	</string>
@@ -470,6 +498,62 @@
 
 	<string id="ui_mcm_ztc_faction_sin_companion_teleport_dist_desc">
 		<text>How far a tamed mutant can fall behind before it teleports to you (5-50m)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_sin_companion_sit_follow_hotkey">
+		<text>Companion sit/follow hotkey</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_sin_companion_sit_follow_hotkey_desc">
+		<text>Toggle tamed mutant companions between Sit (wait in place) and Follow. Aim at a companion within 8m to toggle only that one; otherwise toggles all companions as a group.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_sin_mutant_companion_hud_enabled">
+		<text>Mutant companion health HUD</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_sin_mutant_companion_hud_enabled_desc">
+		<text>Show vanilla-style companion health bars for tamed mutant companions (portrait, distance, health, combat indicator).</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_sin_companion_health_regen_enabled">
+		<text>Out-of-combat health regen</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_sin_companion_health_regen_enabled_desc">
+		<text>Slowly heals tamed companions when they are not fighting and you are not in combat. Matches vanilla stalker companion healing.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_sin_companion_health_regen_interval_sec">
+		<text>Regen tick interval (sec)</text>
+	</string>
+
+	<string id="ui_mcm_ztc_faction_sin_companion_health_regen_amount">
+		<text>Regen per tick (max HP fraction)</text>
+	</string>
+
+	<string id="st_ztc_sin_companion_sit">
+		<text>Mutant companion: Sit</text>
+	</string>
+
+	<string id="st_ztc_sin_companion_follow">
+		<text>Mutant companion: Follow</text>
+	</string>
+
+	<string id="st_ztc_sin_companion_all_sit">
+		<text>All companions: Sit</text>
+	</string>
+
+	<string id="st_ztc_sin_companion_all_follow">
+		<text>All companions: Follow</text>
+	</string>
+
+	<string id="st_ztc_sin_companion_tip">
+		<text>Companion mutant</text>
+	</string>
+
+	<string id="st_ztc_sin_companion_tip_sitting">
+		<text>Companion mutant (Sitting)</text>
 	</string>
 
 	<string id="ui_mcm_ztc_faction_sin_squad_escorts_enabled">

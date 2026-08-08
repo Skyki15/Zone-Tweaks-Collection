@@ -1,0 +1,302 @@
+-- Zone Tweaks Collection — Sin: start with one tamed blind dog (new game only).
+
+local SAVE_KEY = "ztc_sin_start_blind_dog_v1"
+local STORAGE_FRESH_FACTION = "ztc_fresh_start_faction"
+local CONFIG_FRESH_FACTION = "ztc_fresh_start_faction"
+local EVENT_NAME = "ztc_sin_start_blind_dog"
+local SIN_FACTION = "greh"
+local DOG_SECTION = "dog_strong_red"
+
+local start_hook_installed = false
+local spawn_scheduled = false
+local schedule_wait_active = false
+
+local function ztc_sin_start_blind_dog_notify(string_id)
+	if news_manager and news_manager.send_tip and db.actor then
+		news_manager.send_tip(db.actor, string_id, nil, nil, 10000, nil)
+	end
+	printf("~ ZTC Sin Start Blind Dog | %s", tostring(string_id))
+end
+
+local function ztc_sin_start_blind_dog_mcm_master_enabled()
+	if not ztc_faction_mcm or not ztc_faction_mcm.is_enabled then
+		return false
+	end
+	return ztc_faction_mcm.is_enabled() == true
+end
+
+local function ztc_sin_start_blind_dog_toggle_enabled()
+	if not ztc_faction_mcm then
+		return false
+	end
+
+	if ztc_faction_mcm.get_raw_mcm_value then
+		return ztc_faction_mcm.get_raw_mcm_value("sin_start_with_blind_dog") == true
+	end
+	return ztc_faction_mcm.get_config and ztc_faction_mcm.get_config("sin_start_with_blind_dog") == true
+end
+
+local function ztc_sin_start_blind_dog_is_test_area()
+	if IsTestMode then
+		local ok, result = pcall(IsTestMode)
+		if ok and result then
+			return true
+		end
+	end
+
+	if level and level.name then
+		local ok, lvl = pcall(level.name)
+		if ok and lvl == "fake_start" then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function ztc_sin_start_blind_dog_install_start_hook()
+	if start_hook_installed then
+		return true
+	end
+	if not ui_mm_faction_select or not ui_mm_faction_select.UINewGame then
+		return false
+	end
+
+	local orig = ui_mm_faction_select.UINewGame.OnStartGame
+	function ui_mm_faction_select.UINewGame:OnStartGame()
+		local fac = self.selected_faction
+		if fac == SIN_FACTION then
+			if axr_main and axr_main.config then
+				axr_main.config:w_value("character_creation", CONFIG_FRESH_FACTION, fac)
+				axr_main.config:save()
+			end
+		end
+		return orig(self)
+	end
+
+	start_hook_installed = true
+	return true
+end
+
+local function ztc_sin_start_blind_dog_capture_fresh_start()
+	if ztc_start_companions_capture and ztc_start_companions_capture.capture_fresh_start then
+		ztc_start_companions_capture.capture_fresh_start()
+		return
+	end
+
+	local state = alife_storage_manager and alife_storage_manager.get_state and alife_storage_manager.get_state()
+	if not state or state[STORAGE_FRESH_FACTION] then
+		return
+	end
+
+	local config = axr_main and axr_main.config
+	if not config then
+		return
+	end
+
+	local faction = config:r_value("character_creation", CONFIG_FRESH_FACTION, 3)
+	if not faction or faction == "" then
+		faction = config:r_value("character_creation", "new_game_faction", 3)
+	end
+
+	if faction == SIN_FACTION then
+		state[STORAGE_FRESH_FACTION] = faction
+	end
+end
+
+local function ztc_sin_start_blind_dog_get_fresh_faction()
+	local state = alife_storage_manager and alife_storage_manager.get_state and alife_storage_manager.get_state()
+	if state and state[STORAGE_FRESH_FACTION] then
+		return state[STORAGE_FRESH_FACTION]
+	end
+	return nil
+end
+
+local function ztc_sin_start_blind_dog_clear_fresh_faction()
+	local state = alife_storage_manager and alife_storage_manager.get_state and alife_storage_manager.get_state()
+	if state then
+		state[STORAGE_FRESH_FACTION] = nil
+	end
+end
+
+local function ztc_sin_start_blind_dog_is_brand_new_save()
+	if game_statistics and game_statistics.actor_statistics then
+		local stat = game_statistics.actor_statistics["level_changes"]
+		if stat and stat.count ~= nil then
+			return stat.count == 0
+		end
+	end
+	if game_statistics and game_statistics.get_statistic_count then
+		return game_statistics.get_statistic_count("level_changes") == 0
+	end
+	return false
+end
+
+local function ztc_sin_start_blind_dog_resolve_faction()
+	local faction = ztc_sin_start_blind_dog_get_fresh_faction()
+	if faction then
+		return faction
+	end
+
+	pcall(ztc_sin_start_blind_dog_capture_fresh_start)
+	faction = ztc_sin_start_blind_dog_get_fresh_faction()
+	if faction then
+		return faction
+	end
+
+	if not ztc_sin_start_blind_dog_is_brand_new_save() or not ztc_faction_utils or not ztc_faction_utils.actor_is_sin then
+		return nil
+	end
+
+	if not ztc_faction_utils.actor_is_sin() then
+		return nil
+	end
+
+	local state = alife_storage_manager and alife_storage_manager.get_state and alife_storage_manager.get_state()
+	if state then
+		state[STORAGE_FRESH_FACTION] = SIN_FACTION
+	end
+
+	return SIN_FACTION
+end
+
+local function ztc_sin_start_blind_dog_can_offer_feature()
+	if not ztc_sin_start_blind_dog_toggle_enabled() then
+		return false
+	end
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_sin or not ztc_faction_utils.actor_is_sin() then
+		return false
+	end
+	return true
+end
+
+local function ztc_sin_start_blind_dog_grant_companion()
+	local taming = _G.ztc_faction_taming
+	if taming and taming.grant_start_companion then
+		return taming.grant_start_companion(DOG_SECTION) == true
+	end
+	if ztc_faction_taming_grant_start_companion then
+		return ztc_faction_taming_grant_start_companion(DOG_SECTION) == true
+	end
+	return false
+end
+
+function ztc_sin_start_blind_dog_try_spawn()
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
+		return true
+	end
+
+	if ztc_sin_start_blind_dog_is_test_area() then
+		CreateTimeEvent(EVENT_NAME, "spawn", 2, ztc_sin_start_blind_dog_try_spawn)
+		return true
+	end
+
+	if load_var(db.actor, SAVE_KEY) == true then
+		ztc_sin_start_blind_dog_clear_fresh_faction()
+		return true
+	end
+
+	local faction = ztc_sin_start_blind_dog_resolve_faction()
+	if faction ~= SIN_FACTION then
+		return true
+	end
+
+	if not ztc_sin_start_blind_dog_mcm_master_enabled() then
+		ztc_sin_start_blind_dog_clear_fresh_faction()
+		return true
+	end
+
+	if not ztc_sin_start_blind_dog_toggle_enabled() then
+		ztc_sin_start_blind_dog_clear_fresh_faction()
+		return true
+	end
+
+	if not ztc_faction_utils.actor_is_sin() then
+		ztc_sin_start_blind_dog_clear_fresh_faction()
+		return true
+	end
+
+	if not ztc_sin_start_blind_dog_grant_companion() then
+		ztc_sin_start_blind_dog_notify("st_ztc_sin_start_blind_dog_failed")
+		ztc_sin_start_blind_dog_clear_fresh_faction()
+		spawn_scheduled = false
+		return true
+	end
+
+	ztc_sin_start_blind_dog_notify("st_ztc_sin_start_blind_dog_spawned")
+	save_var(db.actor, SAVE_KEY, true)
+	ztc_sin_start_blind_dog_clear_fresh_faction()
+	return true
+end
+
+function ztc_sin_start_blind_dog_try_schedule_spawn()
+	if spawn_scheduled or load_var(db.actor, SAVE_KEY) == true then
+		schedule_wait_active = false
+		return true
+	end
+
+	if ztc_sin_start_blind_dog_is_test_area() then
+		if not schedule_wait_active then
+			schedule_wait_active = true
+			CreateTimeEvent(EVENT_NAME, "wait_leave_test", 0.5, ztc_sin_start_blind_dog_try_schedule_spawn)
+		end
+		return true
+	end
+
+	schedule_wait_active = false
+
+	local faction = ztc_sin_start_blind_dog_resolve_faction()
+	if faction ~= SIN_FACTION then
+		return true
+	end
+
+	if not ztc_sin_start_blind_dog_toggle_enabled() then
+		ztc_sin_start_blind_dog_clear_fresh_faction()
+		return true
+	end
+
+	if not ztc_sin_start_blind_dog_mcm_master_enabled() then
+		return true
+	end
+
+	if not ztc_sin_start_blind_dog_can_offer_feature() then
+		ztc_sin_start_blind_dog_clear_fresh_faction()
+		return true
+	end
+
+	spawn_scheduled = true
+	ztc_sin_start_blind_dog_notify("st_ztc_sin_start_blind_dog_pending")
+	CreateTimeEvent(EVENT_NAME, "spawn", 5, ztc_sin_start_blind_dog_try_spawn)
+	return true
+end
+
+function ztc_sin_start_blind_dog_on_game_load()
+	ztc_sin_start_blind_dog_install_start_hook()
+	pcall(ztc_sin_start_blind_dog_capture_fresh_start)
+end
+
+function ztc_sin_start_blind_dog_actor_on_first_update()
+	ztc_sin_start_blind_dog_install_start_hook()
+	pcall(ztc_sin_start_blind_dog_capture_fresh_start)
+
+	if spawn_scheduled or load_var(db.actor, SAVE_KEY) == true then
+		return
+	end
+
+	local faction = ztc_sin_start_blind_dog_resolve_faction()
+	if faction ~= SIN_FACTION then
+		return
+	end
+
+	if not ztc_sin_start_blind_dog_toggle_enabled() then
+		return
+	end
+
+	ztc_sin_start_blind_dog_try_schedule_spawn()
+end
+
+function on_game_start()
+	ztc_sin_start_blind_dog_install_start_hook()
+	RegisterScriptCallback("on_game_load", ztc_sin_start_blind_dog_on_game_load)
+	RegisterScriptCallback("actor_on_first_update", ztc_sin_start_blind_dog_actor_on_first_update)
+end

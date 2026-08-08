@@ -515,6 +515,13 @@ local function ztc_faction_force_shield_refresh_open_inventory_ui()
 	end)
 end
 
+-- Good-balance perf: refresh Cicatrix bar only on inventory open or hit-driven charge
+-- changes — not while recharge ticks with inventory left open.
+local function ztc_faction_force_shield_refresh_inventory_on_charge_change()
+	last_ui_charge_pct = ztc_faction_force_shield_get_charge_percent()
+	ztc_faction_force_shield_refresh_open_inventory_ui()
+end
+
 local function ztc_faction_force_shield_schedule_post_inventory_work()
 	if not ztc_faction_force_shield_actor_hooks_wanted() then
 		return
@@ -541,11 +548,12 @@ end
 function ztc_faction_force_shield_on_actor_menu_mode(mode, last_mode)
 	if mode == 1 and ztc_faction_force_shield_actor_hooks_wanted() then
 		CreateTimeEvent("ztc_faction_fs_inv_open", "go", 0.05, function()
-			ztc_faction_force_shield_refresh_open_inventory_ui()
+			ztc_faction_force_shield_refresh_inventory_on_charge_change()
 			return true
 		end)
 	end
 	if mode == 0 and (last_mode == 1 or last_mode == 2 or last_mode == 4) then
+		ztc_faction_force_shield_sync_actor_items()
 		ztc_faction_force_shield_schedule_post_inventory_work()
 	end
 end
@@ -646,8 +654,8 @@ local function ztc_faction_force_shield_install_info_hook()
 end
 
 local function ztc_faction_force_shield_install_inventory_hook()
-	-- Intentionally no UIInventory.Update / UpdateInfo hooks — they ran every frame and
-	-- could freeze inventory (especially after mid-save MCM toggle). Cell + desc hooks suffice.
+	-- No UIInventory.Update / UpdateInfo hooks — they ran every frame and could freeze
+	-- inventory. Cicatrix bar refresh is open/hit-only (see refresh_inventory_on_charge_change).
 end
 
 local function ztc_faction_force_shield_mark_artifact_transition()
@@ -1708,8 +1716,13 @@ function ztc_faction_force_shield_actor_on_before_hit(shit, bone_id, flags)
 		return
 	end
 
+	local charge_before = ztc_faction_force_shield_get_charge_percent()
 	ztc_faction_force_shield_handle_bullet_hit(db.actor, shit, bone_id, ztc_faction_force_shield_player_damage_mult(), true)
 	ztc_faction_force_shield_preserve_cicatrix_items()
+
+	if ztc_faction_force_shield_get_charge_percent() ~= charge_before then
+		ztc_faction_force_shield_refresh_inventory_on_charge_change()
+	end
 
 	if actor_shield_broken then
 		ztc_faction_force_shield_schedule_hit_recovery(true)
@@ -1898,15 +1911,11 @@ function ztc_faction_force_shield_actor_on_update()
 	end
 	ztc_faction_force_shield_update_charge(delta_sec)
 
-	local charge_pct = ztc_faction_force_shield_get_charge_percent()
-	if charge_pct ~= last_ui_charge_pct then
-		last_ui_charge_pct = charge_pct
-		ztc_faction_force_shield_refresh_open_inventory_ui()
-	end
-
 	if now >= condition_sync_next_ts then
 		condition_sync_next_ts = now + sync_interval_ms
-		ztc_faction_force_shield_sync_actor_items()
+		if not ztc_faction_force_shield_inventory_ui_open() then
+			ztc_faction_force_shield_sync_actor_items()
+		end
 	end
 end
 

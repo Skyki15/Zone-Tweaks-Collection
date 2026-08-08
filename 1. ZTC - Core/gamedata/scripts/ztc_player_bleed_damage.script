@@ -1,0 +1,134 @@
+-- Zone Tweaks Collection — Actor bleed tweaks (Player Tweaks)
+
+_G.ztc_player_bleed_damage = _G.ztc_player_bleed_damage or {}
+local mod = _G.ztc_player_bleed_damage
+
+local BLEEDING_V_FALLBACK = 0.0015
+local WOUND_INCARNATION_V_FALLBACK = 0.0002
+local MAX_UPDATE_DELTA_SEC = 1.0
+
+local cached_damage_multiplier = 1
+local cached_heal_multiplier = 1
+local last_update_ts = 0
+
+function mod.load_settings()
+	local damage_val = tonumber(ztc_player_mcm.get_config("bleed_damage_multiplier"))
+	if damage_val then
+		cached_damage_multiplier = math.max(1, math.min(3, damage_val))
+	else
+		cached_damage_multiplier = 1
+	end
+
+	local heal_val = tonumber(ztc_player_mcm.get_config("bleed_heal_rate_multiplier"))
+	if heal_val then
+		cached_heal_multiplier = math.max(0.25, math.min(3, heal_val))
+	else
+		cached_heal_multiplier = 1
+	end
+end
+
+function mod.is_active()
+	return cached_damage_multiplier > 1.0001 or math.abs(cached_heal_multiplier - 1) > 0.0001
+end
+
+function mod.get_bleeding_v()
+	if ini_sys then
+		local val = ini_sys:r_float_ex("actor_condition", "bleeding_v")
+		if not val then
+			val = ini_sys:r_float_ex("actor", "bleeding_v")
+		end
+		if val then
+			return val
+		end
+	end
+	return BLEEDING_V_FALLBACK
+end
+
+function mod.get_wound_incarnation_v()
+	if ini_sys then
+		local val = ini_sys:r_float_ex("actor_condition", "wound_incarnation_v")
+		if val then
+			return val
+		end
+	end
+	return WOUND_INCARNATION_V_FALLBACK
+end
+
+local function apply_bleed_damage_tweak(actor, bleed, delta_sec)
+	if cached_damage_multiplier <= 1.0001 then
+		return
+	end
+
+	local extra = bleed * delta_sec * mod.get_bleeding_v() * (cached_damage_multiplier - 1)
+	if extra <= 0 or not actor.change_health then
+		return
+	end
+
+	actor:change_health(-extra)
+end
+
+local function apply_bleed_heal_tweak(actor, bleed, delta_sec)
+	if math.abs(cached_heal_multiplier - 1) <= 0.0001 then
+		return
+	end
+
+	local delta = bleed * delta_sec * mod.get_wound_incarnation_v() * (cached_heal_multiplier - 1)
+	if math.abs(delta) <= 0 then
+		return
+	end
+
+	if actor.change_bleeding then
+		actor:change_bleeding(-delta)
+	end
+end
+
+function ztc_player_bleed_damage_on_update()
+	if not mod.is_active() then
+		return
+	end
+
+	local actor = db.actor
+	if not (actor and actor.alive and actor:alive()) then
+		return
+	end
+
+	if get_console_cmd and get_console_cmd(1, "g_god") then
+		return
+	end
+
+	local bleed = actor.bleeding
+	if not bleed or bleed <= 0 then
+		last_update_ts = time_global()
+		return
+	end
+
+	local now = time_global()
+	if last_update_ts == 0 then
+		last_update_ts = now
+		return
+	end
+
+	local delta_sec = (now - last_update_ts) / 1000.0
+	last_update_ts = now
+	if delta_sec <= 0 then
+		return
+	end
+	if delta_sec > MAX_UPDATE_DELTA_SEC then
+		delta_sec = MAX_UPDATE_DELTA_SEC
+	end
+
+	apply_bleed_damage_tweak(actor, bleed, delta_sec)
+	apply_bleed_heal_tweak(actor, bleed, delta_sec)
+end
+
+function ztc_player_bleed_damage_on_option_change()
+	mod.load_settings()
+	last_update_ts = 0
+end
+
+function on_game_start()
+	mod.load_settings()
+
+	RegisterScriptCallback("actor_on_update", ztc_player_bleed_damage_on_update)
+	RegisterScriptCallback("on_option_change", ztc_player_bleed_damage_on_option_change)
+end

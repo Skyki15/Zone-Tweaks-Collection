@@ -24,4 +24,43 @@
 		<text>Насколько потеря выносливости увеличивает обезвоживание. 0 = выкл. (только ванильная жажда). Требует включённой жажды в настройках сложности. Большие значения ускоряют обезвоживание при спринте и тяжёлой ноше.</text>
 	</string>
 
+	<string id="ui_mcm_ztc_player_stamina_hunger_multiplier">
+		<text>Связь выносливости с голодом</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_stamina_hunger_multiplier_desc">
+		<text>Насколько трата выносливости увеличивает голод. 0 = выкл. (только ванильная сытость). Более высокие значения быстрее снижают сытость при беге и перегрузе.</text>
+	</string>
+
+
+	<string id="ui_mcm_menu_bleeding">
+		<text>Кровотечение</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleeding_title">
+		<text>Кровотечение</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleeding_damage_desc">
+		<text>Множитель урона от кровотечения для игрока. 1.0 = ваниль. Более высокие значения делают раны смертоноснее.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleed_damage_multiplier">
+		<text>Множитель урона от кровотечения</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleed_damage_multiplier_desc">
+		<text>Умножает потерю здоровья от кровотечения. Диапазон 1.0 (ваниль) — 3.0 (тройной урон).</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleed_heal_rate_multiplier">
+		<text>Скорость заживления ран</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleed_heal_rate_multiplier_desc">
+		<text>Множитель скорости естественного заживления ран и остановки кровотечения. 1.0 = ваниль. Выше — быстрее; ниже — медленнее.</text>
+	</string>
+
+
+
 </string_table>

@@ -1,7 +1,8 @@
 -- Zone Tweaks Collection — paid escort recruitment tweaks (zzzzz_ prefix loads after txr_paid_companions).
 -- Loner / Freedom blocking and Merc / Bandit / Renegade pricing use Faction Tweaks MCM.
--- Mercenaries and Renegades: payment-only escort (no free goodwill recruitment).
--- Bandits: paid escort optional; vanilla high-goodwill free recruitment preserved.
+-- Mercenaries: payment-only escort (no free goodwill recruitment).
+-- Bandits / Renegades: paid escort optional; vanilla high-goodwill free recruitment preserved for same-faction actors.
+-- Renegade free recruitment applies only when the actor is Renegade (not Bandit or other factions).
 -- Paid escort may be hired and kept in northern / underground blacklisted maps (vanilla restriction removed).
 
 local VANILLA_BASE_24 = 1500
@@ -131,12 +132,33 @@ local function is_renegade_paid_escort_enabled()
 	return read_mcm_bool(MCM_RENEGADE_ROOT .. "renegade_paid_escort_enabled", false)
 end
 
-local function blocks_goodwill_free_recruitment(comm)
+local function actor_is_renegade(actor)
+	if not actor then
+		return false
+	end
+
+	if ztc_faction_utils and ztc_faction_utils.get_actor_community then
+		local com = ztc_faction_utils.get_actor_community(actor)
+		return com == "renegade" or com == "actor_renegade"
+	end
+
+	if character_community then
+		local com = character_community(actor)
+		return com == "renegade" or com == "actor_renegade"
+	end
+
+	return false
+end
+
+local function blocks_goodwill_free_recruitment(comm, actor)
 	if comm == "killer" then
 		return is_mercenary_paid_escort_enabled()
 	end
 	if comm == "renegade" then
-		return is_renegade_paid_escort_enabled()
+		if not is_renegade_paid_escort_enabled() then
+			return false
+		end
+		return not actor_is_renegade(actor)
 	end
 	return false
 end
@@ -615,7 +637,7 @@ local function bind_free_recruitment_blocks()
 	if txr_paid_companions._ztc_base_is_actor_natural then
 		function txr_paid_companions.is_actor_natural(actor, npc)
 			local comm = get_npc_community(actor, npc)
-			if blocks_goodwill_free_recruitment(comm) then
+			if blocks_goodwill_free_recruitment(comm, actor) then
 				return allows_paid_escort_squad(actor, npc)
 			end
 			return txr_paid_companions._ztc_base_is_actor_natural(actor, npc)
@@ -629,7 +651,7 @@ local function bind_free_recruitment_blocks()
 
 		function dialogs_axr_companion.is_actor_friend(actor, npc)
 			local comm = get_npc_community(actor, npc)
-			if blocks_goodwill_free_recruitment(comm) then
+			if blocks_goodwill_free_recruitment(comm, actor) then
 				return false
 			end
 			return dialogs_axr_companion._ztc_base_is_actor_friend(actor, npc)
@@ -643,7 +665,7 @@ local function bind_free_recruitment_blocks()
 
 		function dialogs_axr_companion2.is_actor_friend(actor, npc)
 			local comm = get_npc_community(actor, npc)
-			if blocks_goodwill_free_recruitment(comm) then
+			if blocks_goodwill_free_recruitment(comm, actor) then
 				return false
 			end
 			return dialogs_axr_companion2._ztc_base_is_actor_friend(actor, npc)

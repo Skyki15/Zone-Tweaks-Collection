@@ -1,16 +1,26 @@
 local FOLLOW_CHECK_MS = 1500
+local SIT_ENFORCE_MS = 250
 local RESTORE_CHECK_MS = 1000
 local RESTORE_PENDING_MS = 10000
 local TELEPORT_DIST_DEFAULT = 30.0
 local FOLLOW_DIST = 6.0
 local FOLLOW_REST_DIST = 4.0
 local FOLLOW_RUN_DIST = 10.0
+local FOLLOW_CATCHUP_DIST = 12.0
 local FOLLOW_OFFSET = -2.0
 local FOLLOW_BACK_STEP = 1.2
 local FOLLOW_SIDE_STEP = 1.0
 local SAVE_KEY = "ztc_faction_sin_tamed_mutants"
 local SAVE_KEY_TEMPLATES = "ztc_faction_sin_tamed_templates"
+local SAVE_KEY_START_HEALTH = "ztc_faction_sin_start_dog_health"
 local FIRST_UPDATE_SCAN_RADIUS = 80
+local START_BLIND_DOG_HEALTH_MIN = 1.25
+local START_BLIND_DOG_HEALTH_MAX = 3.0
+local START_BLIND_DOG_HEALTH_DEFAULT = 1.25
+local START_DOG_HEALTH_APPLY_DELAY = 0.2
+local COMPANION_REGEN_EVENT = "ztc_taming_companion_regen"
+local COMPANION_REGEN_INTERVAL_SEC_DEFAULT = 10
+local COMPANION_REGEN_AMOUNT_DEFAULT = 0.1
 
 -- Tamable mutant section patterns (order matters: pseudodog before dog; psy_dog excluded).
 local TAMABLE_SECTION_PATTERNS = {
@@ -35,11 +45,15 @@ local tamed_ids = {}
 local next_follow_tick = {}
 local tamed_count = 0
 local companion_templates = {}
+local companion_start_health = {}
 local next_restore_check_ts = 0
 local transition_restore_mode = false
 local last_tame_try_ts = {}
 local TAME_TRY_DEBOUNCE_MS = 750
 local first_update_scan_pending = false
+local actor_combat_until = 0
+local ACTOR_COMBAT_GRACE_MS = 20000
+local companion_hostile_until = {}
 
 local function is_alive_obj(obj)
 	if not obj then
@@ -229,36 +243,115 @@ local function remove_template(section)
 	end
 end
 
-local function mark_tamed_by_id(id, section, is_pending_spawn)
+local function clamp_start_blind_dog_health(mult)
+	mult = tonumber(mult) or START_BLIND_DOG_HEALTH_DEFAULT
+	if mult < START_BLIND_DOG_HEALTH_MIN then
+		return START_BLIND_DOG_HEALTH_MIN
+	end
+	if mult > START_BLIND_DOG_HEALTH_MAX then
+		return START_BLIND_DOG_HEALTH_MAX
+	end
+	return mult
+end
+
+local function get_start_blind_dog_health_mult()
+	local mult = START_BLIND_DOG_HEALTH_DEFAULT
+	if ztc_faction_mcm and ztc_faction_mcm.get_raw_mcm_value then
+		mult = ztc_faction_mcm.get_raw_mcm_value("sin_start_blind_dog_health") or mult
+	elseif ztc_faction_mcm and ztc_faction_mcm.get_config then
+		mult = ztc_faction_mcm.get_config("sin_start_blind_dog_health") or mult
+	end
+	return clamp_start_blind_dog_health(mult)
+end
+
+local function apply_companion_health_mult(obj, mult)
+	if not is_alive_obj(obj) or not mult then
+		return
+	end
+
+	mult = clamp_start_blind_dog_health(mult)
+	pcall(function()
+		if obj.set_max_health then
+			obj:set_max_health(mult)
+			obj.health = 1
+		elseif obj.set_health_ex then
+			obj:set_health_ex(mult)
+		end
+	end)
+end
+
+local function schedule_companion_health_apply(obj, mult)
+	if not obj or not mult then
+		return
+	end
+
+	local obj_id = obj:id()
+	CreateTimeEvent("ztc_faction_taming", "health_" .. obj_id, START_DOG_HEALTH_APPLY_DELAY, function()
+		local lobj = level.object_by_id(obj_id)
+		if is_alive_obj(lobj) then
+			apply_companion_health_mult(lobj, mult)
+		end
+		return true
+	end)
+end
+
+local function try_apply_entry_health_mult(obj)
+	if not obj then
+		return
+	end
+
+	local entry = tamed_ids[obj:id()]
+	if type(entry) == "table" and entry.health_mult then
+		schedule_companion_health_apply(obj, entry.health_mult)
+	end
+end
+
+local function mark_tamed_by_id(id, section, is_pending_spawn, health_mult)
 	if not id then
 		return
 	end
 
 	local now = time_global()
-	tamed_ids[id] = {
+	local entry = {
 		section = section,
 		ts = now,
 		last_seen = now,
 		pending_until = is_pending_spawn and (now + RESTORE_PENDING_MS) or nil
 	}
+
+	if health_mult then
+		entry.health_mult = clamp_start_blind_dog_health(health_mult)
+	elseif is_pending_spawn and section and companion_start_health[section] then
+		entry.health_mult = companion_start_health[section]
+	end
+
+	tamed_ids[id] = entry
 	recount_tamed()
+end
+
+local function companion_exists_in_sim(id, entry, now, live_only)
+	local lobj = level.object_by_id(id)
+	if is_alive_obj(lobj) then
+		return true
+	end
+
+	if live_only then
+		return false
+	end
+
+	if type(entry) == "table" and entry.pending_until and now < entry.pending_until then
+		return true
+	end
+
+	return alife_object(id) ~= nil
 end
 
 local function count_runtime_by_section(section, now, live_only)
 	local total = 0
 	for id, entry in pairs(tamed_ids) do
 		if type(entry) == "table" and entry.section == section then
-			local lobj = level.object_by_id(id)
-			local is_live = is_alive_obj(lobj)
-			if live_only then
-				if is_live then
-					total = total + 1
-				end
-			else
-				local is_pending = entry.pending_until and now < entry.pending_until
-				if is_live or is_pending then
-					total = total + 1
-				end
+			if companion_exists_in_sim(id, entry, now, live_only) then
+				total = total + 1
 			end
 		end
 	end
@@ -333,17 +426,64 @@ local function clear_tame_tip(obj)
 	obj:set_tip_text("")
 end
 
+local function is_sitting(id)
+	local entry = tamed_ids[id]
+	return type(entry) == "table" and entry.sitting == true
+end
+
 local function set_companion_tip(obj)
 	if not obj then
 		return
 	end
-	obj:set_tip_text("Companion mutant")
+
+	if is_sitting(obj:id()) then
+		local tip = "Companion mutant (Sitting)"
+		if game and game.translate_string then
+			tip = game.translate_string("st_ztc_sin_companion_tip_sitting") or tip
+		end
+		obj:set_tip_text(tip)
+	else
+		local tip = "Companion mutant"
+		if game and game.translate_string then
+			tip = game.translate_string("st_ztc_sin_companion_tip") or tip
+		end
+		obj:set_tip_text(tip)
+	end
 end
 
 local function actor_msg(text)
 	if actor_menu and actor_menu.set_msg then
-		actor_menu.set_msg(1, text, 6)
+		actor_menu.set_msg(1, text, 8)
 	end
+end
+
+local function show_command_feedback(string_id, fallback)
+	local text = fallback
+	if game and game.translate_string then
+		text = game.translate_string(string_id) or fallback
+	end
+
+	actor_msg(text)
+
+	if news_manager and news_manager.send_tip and db.actor then
+		news_manager.send_tip(db.actor, string_id, nil, nil, 8000, nil)
+	end
+end
+
+local function store_position(pos)
+	if not pos then
+		return nil
+	end
+
+	return { x = pos.x, y = pos.y, z = pos.z }
+end
+
+local function load_stored_position(stored)
+	if type(stored) ~= "table" or stored.x == nil then
+		return nil
+	end
+
+	return vector():set(stored.x, stored.y, stored.z)
 end
 
 local function relation_to_actor(npc)
@@ -356,6 +496,110 @@ end
 local function set_peaceful(flags)
 	flags.override = true
 	flags.result = false
+end
+
+local function set_hostile(flags)
+	flags.override = true
+	flags.result = true
+end
+
+local function mark_actor_combat()
+	actor_combat_until = time_global() + ACTOR_COMBAT_GRACE_MS
+end
+
+local function is_actor_in_combat()
+	return time_global() < actor_combat_until
+end
+
+local function mark_companion_hostile(enemy)
+	if not enemy then
+		return
+	end
+
+	companion_hostile_until[enemy:id()] = time_global() + ACTOR_COMBAT_GRACE_MS
+end
+
+local function is_marked_companion_hostile(obj)
+	if not obj then
+		return false
+	end
+
+	local until_ts = companion_hostile_until[obj:id()]
+	if not until_ts then
+		return false
+	end
+
+	if time_global() >= until_ts then
+		companion_hostile_until[obj:id()] = nil
+		return false
+	end
+
+	return true
+end
+
+local function is_hostile_to_actor(obj)
+	if not obj or not ztc_faction_utils.actor_is_valid() then
+		return false
+	end
+
+	if obj:id() == db.actor:id() then
+		return false
+	end
+
+	if is_marked_companion_hostile(obj) then
+		return true
+	end
+
+	if IsMonster(obj) then
+		if ztc_faction_sin_alliance and ztc_faction_sin_alliance.is_hostile_mutant then
+			if ztc_faction_sin_alliance.is_hostile_mutant(obj, time_global()) then
+				return true
+			end
+		end
+
+		if obj.get_enemy then
+			local enemy = obj:get_enemy()
+			if enemy and enemy:id() == db.actor:id() then
+				return true
+			end
+		end
+
+		if obj.relation then
+			local ok, rel = pcall(function()
+				return obj:relation(db.actor)
+			end)
+			if ok and rel and rel >= game_object.enemy then
+				return true
+			end
+		end
+
+		return false
+	end
+
+	local rel = relation_to_actor(obj)
+	if rel == game_object.enemy then
+		return true
+	end
+
+	return false
+end
+
+local function set_companion_hostile_to(companion, enemy)
+	if not companion or not enemy or not is_alive_obj(companion) or not is_alive_obj(enemy) then
+		return
+	end
+
+	if is_tamed(enemy) then
+		return
+	end
+
+	pcall(function()
+		companion:set_relation(game_object.enemy, enemy)
+		enemy:set_relation(game_object.enemy, companion)
+		if companion.set_enemy then
+			companion:set_enemy(enemy)
+		end
+	end)
 end
 
 local function enemy_get(obj)
@@ -375,7 +619,91 @@ local function enemy_get(obj)
 	return true
 end
 
-local function rest(obj)
+local function companion_regen_is_enabled()
+	if ztc_faction_mcm and ztc_faction_mcm.get_config then
+		local val = ztc_faction_mcm.get_config("sin_companion_health_regen_enabled")
+		if val ~= nil then
+			return val == true
+		end
+	end
+	return true
+end
+
+local function get_companion_regen_interval_sec()
+	local interval = COMPANION_REGEN_INTERVAL_SEC_DEFAULT
+	if ztc_faction_mcm and ztc_faction_mcm.get_raw_mcm_value then
+		interval = tonumber(ztc_faction_mcm.get_raw_mcm_value("sin_companion_health_regen_interval_sec")) or interval
+	elseif ztc_faction_mcm and ztc_faction_mcm.get_config then
+		interval = tonumber(ztc_faction_mcm.get_config("sin_companion_health_regen_interval_sec")) or interval
+	end
+	if interval < 5 then
+		interval = 5
+	elseif interval > 30 then
+		interval = 30
+	end
+	return interval
+end
+
+local function get_companion_regen_amount()
+	local amount = COMPANION_REGEN_AMOUNT_DEFAULT
+	if ztc_faction_mcm and ztc_faction_mcm.get_raw_mcm_value then
+		amount = tonumber(ztc_faction_mcm.get_raw_mcm_value("sin_companion_health_regen_amount")) or amount
+	elseif ztc_faction_mcm and ztc_faction_mcm.get_config then
+		amount = tonumber(ztc_faction_mcm.get_config("sin_companion_health_regen_amount")) or amount
+	end
+	if amount < 0.05 then
+		amount = 0.05
+	elseif amount > 0.25 then
+		amount = 0.25
+	end
+	return amount
+end
+
+local function companion_is_out_of_combat(obj)
+	if enemy_get(obj) or is_actor_in_combat() then
+		return false
+	end
+	return true
+end
+
+local function try_regen_companion_health(obj)
+	if not is_alive_obj(obj) or not companion_is_out_of_combat(obj) then
+		return
+	end
+
+	local health = obj.health or 0
+	if health >= 1 then
+		return
+	end
+
+	obj.health = clamp(health + get_companion_regen_amount(), 0, 1)
+end
+
+function ztc_faction_taming_companion_regen_timer()
+	local interval_sec = get_companion_regen_interval_sec()
+	ResetTimeEvent(COMPANION_REGEN_EVENT, "tick", interval_sec)
+
+	if not ztc_faction_utils.is_mod_enabled() or tamed_count == 0 then
+		return false
+	end
+
+	if not companion_regen_is_enabled() then
+		return false
+	end
+
+	for id, entry in pairs(tamed_ids) do
+		if type(entry) == "table" then
+			local lobj = level.object_by_id(id)
+			if is_alive_obj(lobj) then
+				try_regen_companion_health(lobj)
+			end
+		end
+	end
+
+	return false
+end
+
+local function clear_move_action(obj)
 	if not obj then
 		return
 	end
@@ -383,10 +711,67 @@ local function rest(obj)
 	if obj.action and obj:action() then
 		obj:reset_action_queue()
 	end
+end
+
+local function set_companion_movement_enabled(obj, enabled)
+	if not obj or not obj.movement_enabled then
+		return
+	end
+
+	pcall(function()
+		obj:movement_enabled(enabled == true)
+	end)
+end
+
+local function rest_hard(obj)
+	if not obj then
+		return
+	end
+
+	clear_move_action(obj)
 
 	if obj.get_script and obj:get_script() then
 		obj:script(false, obj:get_script_name())
 	end
+end
+
+local function release_companion_control(obj)
+	rest_hard(obj)
+end
+
+local function apply_sit_state(obj)
+	if not obj then
+		return
+	end
+
+	rest_hard(obj)
+	set_companion_movement_enabled(obj, false)
+end
+
+local function clear_sit_state(obj)
+	if not obj then
+		return
+	end
+
+	set_companion_movement_enabled(obj, true)
+end
+
+local function prepare_companion_peaceful(obj)
+	if not obj or not ztc_faction_utils.actor_is_valid() then
+		return
+	end
+
+	pcall(function()
+		if obj.set_enemy and obj.get_enemy then
+			local enemy = obj:get_enemy()
+			if enemy and (enemy:id() == db.actor:id() or is_tamed(enemy)) then
+				obj:set_enemy(nil)
+			end
+		end
+
+		obj:set_relation(game_object.friend, db.actor)
+		db.actor:set_relation(game_object.friend, obj)
+	end)
 end
 
 local function safe_set_npc_position(obj, pos)
@@ -424,7 +809,7 @@ local function safe_set_npc_position(obj, pos)
 	return false
 end
 
-local function run_to(obj, pos)
+local function run_companion_to_pos(obj, pos)
 	if not obj or not pos then
 		return
 	end
@@ -434,9 +819,21 @@ local function run_to(obj, pos)
 		return
 	end
 
-	if not obj:get_script() then
-		obj:script(true, "run_to_e")
-	end
+	pcall(function()
+		if xr_logic and xr_logic.mob_capture then
+			xr_logic.mob_capture(obj, true)
+		else
+			if obj:get_script() then
+				local name = (obj.get_script_name and obj:get_script_name()) or ""
+				if name ~= "run_to_e" then
+					obj:script(false, name)
+				end
+			end
+			if not obj:get_script() then
+				obj:script(true, "run_to_e")
+			end
+		end
+	end)
 
 	local dist_to_target = obj:position():distance_to(pos)
 	local move_type = dist_to_target > FOLLOW_RUN_DIST and move.run_fwd or move.walk_fwd
@@ -446,7 +843,7 @@ local function run_to(obj, pos)
 	local pause_until = time_global() + 500
 	obj:set_fastcall(function(monster)
 		if pause_until < time_global() then
-			rest(monster)
+			release_companion_control(monster)
 			return true
 		end
 		return false
@@ -476,35 +873,180 @@ local function break_friendly_target(monster)
 		return
 	end
 
-	rest(monster)
-	safe_set_npc_position(monster, build_follow_position(db.actor, monster:id()))
+	if is_sitting(monster:id()) then
+		return
+	end
+
+	clear_move_action(monster)
+
+	pcall(function()
+		if monster.set_enemy then
+			monster:set_enemy(nil)
+		end
+	end)
+end
+
+local function enforce_sit_position(monster)
+	if not monster then
+		return
+	end
+
+	local entry = tamed_ids[monster:id()]
+	if type(entry) ~= "table" or not entry.sitting then
+		return
+	end
+
+	pcall(function()
+		if monster.movement_enabled and monster:movement_enabled() then
+			apply_sit_state(monster)
+		end
+	end)
+
+	local sit_pos = load_stored_position(entry.sit_pos)
+	if not sit_pos then
+		entry.sit_pos = store_position(monster:position())
+		apply_sit_state(monster)
+		return
+	end
+
+	if monster:position():distance_to(sit_pos) > 1.25 then
+		safe_set_npc_position(monster, sit_pos)
+		apply_sit_state(monster)
+	end
 end
 
 local function maintain_companion_position(monster)
+	if is_sitting(monster:id()) then
+		enforce_sit_position(monster)
+		return
+	end
+
+	if not ztc_faction_utils.actor_is_valid() then
+		return
+	end
+
+	set_companion_movement_enabled(monster, true)
+
+	if enemy_get(monster) or is_actor_in_combat() then
+		release_companion_control(monster)
+		return
+	end
+
 	local actor = db.actor
-	local dist = monster:position():distance_to(actor:position())
-	if dist <= FOLLOW_REST_DIST then
+	local follow_pos = build_follow_position(actor, monster:id())
+	local dist_actor = monster:position():distance_to(actor:position())
+	local dist_follow = monster:position():distance_to(follow_pos)
+	local catchup_dist = math.max(FOLLOW_CATCHUP_DIST, get_companion_teleport_dist())
+
+	if dist_actor > catchup_dist then
+		safe_set_npc_position(monster, follow_pos)
+		release_companion_control(monster)
+		return
+	end
+
+	if dist_actor <= FOLLOW_REST_DIST and dist_follow <= 2.5 then
 		if monster.get_script and monster:get_script() and not enemy_get(monster) then
-			rest(monster)
+			release_companion_control(monster)
 		end
 		return
 	end
 
-	if dist <= FOLLOW_DIST then
+	if dist_actor <= FOLLOW_DIST and dist_follow <= 2.5 then
 		return
 	end
 
-	local dest = build_follow_position(actor, monster:id())
-	if dist > get_companion_teleport_dist() then
-		if enemy_get(monster) then
-			return
+	run_companion_to_pos(monster, follow_pos)
+end
+
+local function activate_companion_follow(obj)
+	if not obj then
+		return
+	end
+
+	local id = obj:id()
+	local entry = tamed_ids[id]
+	if type(entry) == "table" then
+		entry.sitting = nil
+		entry.sit_pos = nil
+	end
+
+	set_companion_movement_enabled(obj, true)
+	clear_sit_state(obj)
+	prepare_companion_peaceful(obj)
+	release_companion_control(obj)
+	next_follow_tick[id] = 0
+	maintain_companion_position(obj)
+end
+
+local function should_companion_fight(npc, enemy)
+	if is_marked_companion_hostile(enemy) or is_hostile_to_actor(enemy) then
+		return true
+	end
+
+	if npc.get_enemy then
+		local current = npc:get_enemy()
+		if current and current:id() == enemy:id() then
+			return true
 		end
-		safe_set_npc_position(monster, dest)
+	end
+
+	if enemy.get_enemy and ztc_faction_utils.actor_is_valid() then
+		local target = enemy:get_enemy()
+		if target and target:id() == db.actor:id() then
+			return true
+		end
+	end
+
+	if not IsMonster(enemy) then
+		local rel = relation_to_actor(enemy)
+		if rel == game_object.enemy or is_actor_in_combat() then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function rally_companions_against(enemy)
+	if not enemy or not is_alive_obj(enemy) or is_tamed(enemy) then
 		return
 	end
 
-	if not enemy_get(monster) then
-		run_to(monster, dest)
+	mark_actor_combat()
+	mark_companion_hostile(enemy)
+
+	for id, entry in pairs(tamed_ids) do
+		if type(entry) == "table" and not is_sitting(id) then
+			local lobj = level.object_by_id(id)
+			if is_alive_obj(lobj) then
+				release_companion_control(lobj)
+				set_companion_hostile_to(lobj, enemy)
+			end
+		end
+	end
+end
+
+local function set_sitting(obj, sit)
+	if not obj then
+		return
+	end
+
+	local id = obj:id()
+	local entry = tamed_ids[id]
+	if type(entry) ~= "table" then
+		return
+	end
+
+	if sit then
+		entry.sitting = true
+		entry.sit_pos = store_position(obj:position())
+		apply_sit_state(obj)
+		set_companion_tip(obj)
+		next_follow_tick[id] = 0
+		enforce_sit_position(obj)
+	else
+		activate_companion_follow(obj)
+		set_companion_tip(obj)
 	end
 end
 
@@ -559,7 +1101,7 @@ function ztc_faction_tame_mutant(obj)
 	end
 
 	mark_tamed(obj, true)
-	next_follow_tick[obj:id()] = 0
+	activate_companion_follow(obj)
 	set_companion_tip(obj)
 	actor_msg("The mutant joins you.")
 	return true
@@ -581,9 +1123,18 @@ local function apply_taming_interaction_state(obj)
 
 	obj:set_callback(callback.use_object, ztc_faction_tame_mutant, obj)
 	if is_tamed(obj) then
+		if is_sitting(obj:id()) then
+			apply_sit_state(obj)
+		else
+			activate_companion_follow(obj)
+		end
 		set_companion_tip(obj)
 	else
 		set_tame_tip(obj)
+	end
+
+	if is_tamed(obj) then
+		try_apply_entry_health_mult(obj)
 	end
 end
 
@@ -596,8 +1147,15 @@ function ztc_faction_taming_monster_on_net_spawn(obj)
 		local section = obj:section()
 		local required = companion_templates[section] or 0
 		if required > 0 and count_runtime_by_section(section, time_global(), true) < required then
-			mark_tamed_by_id(obj:id(), section)
+			local health_mult = companion_start_health[section]
+			mark_tamed_by_id(obj:id(), section, false, health_mult)
 			next_follow_tick[obj:id()] = 0
+			if is_sitting(obj:id()) then
+				apply_sit_state(obj)
+			else
+				activate_companion_follow(obj)
+			end
+			try_apply_entry_health_mult(obj)
 			set_companion_tip(obj)
 		end
 	end
@@ -627,9 +1185,26 @@ function ztc_faction_taming_monster_on_update(obj)
 		return
 	end
 
+	if is_sitting(id) then
+		if not ztc_faction_utils.sim_skip_heavy_work() then
+			local now = time_global()
+			local next_tick = next_follow_tick[id] or 0
+			if now >= next_tick then
+				next_follow_tick[id] = now + ztc_faction_utils.sim_interval_ms(SIT_ENFORCE_MS)
+				enforce_sit_position(obj)
+			end
+		end
+		return
+	end
+
 	local current_enemy = obj:get_enemy()
 	if current_enemy and is_tamed(current_enemy) then
 		break_friendly_target(obj)
+		return
+	end
+
+	if enemy_get(obj) or is_actor_in_combat() then
+		release_companion_control(obj)
 		return
 	end
 
@@ -647,7 +1222,8 @@ function ztc_faction_taming_monster_on_update(obj)
 		return
 	end
 
-	next_follow_tick[id] = now + ztc_faction_utils.sim_interval_ms(FOLLOW_CHECK_MS)
+	local interval_ms = is_sitting(id) and SIT_ENFORCE_MS or FOLLOW_CHECK_MS
+	next_follow_tick[id] = now + ztc_faction_utils.sim_interval_ms(interval_ms)
 	maintain_companion_position(obj)
 end
 
@@ -681,6 +1257,11 @@ function ztc_faction_taming_on_enemy_eval(npc, enemy, flags)
 	end
 
 	if npc_tamed then
+		if should_companion_fight(npc, enemy) then
+			set_hostile(flags)
+			return
+		end
+
 		if IsMonster(enemy) then
 			set_peaceful(flags)
 			return
@@ -720,9 +1301,67 @@ function ztc_faction_taming_on_enemy_eval(npc, enemy, flags)
 	end
 end
 
+function ztc_faction_taming_on_fighting_actor(npc)
+	if not ztc_faction_utils.is_mod_enabled() or tamed_count == 0 then
+		return
+	end
+
+	if not npc or not IsStalker(npc) then
+		return
+	end
+
+	rally_companions_against(npc)
+end
+
+function ztc_faction_taming_actor_on_weapon_fired(obj, weapon, ammo_elapsed, grenade_elapsed, ammo_type, grenade_type)
+	if not ztc_faction_utils.is_mod_enabled() or tamed_count == 0 then
+		return
+	end
+
+	mark_actor_combat()
+
+	local target = level.get_target_obj and level.get_target_obj()
+	if target and is_alive_obj(target) and not is_tamed(target) then
+		rally_companions_against(target)
+	end
+end
+
+function ztc_faction_taming_actor_on_hit_callback(victim, amount, local_direction, who, bone_index)
+	if not ztc_faction_utils.is_mod_enabled() or tamed_count == 0 then
+		return
+	end
+
+	if not who or not amount or amount <= 0 then
+		return
+	end
+
+	if not ztc_faction_utils.actor_is_valid() then
+		return
+	end
+
+	if victim and victim:id() == db.actor:id() then
+		rally_companions_against(who)
+	end
+end
+
+function ztc_faction_taming_monster_on_hit_callback(victim, amount, local_direction, who, bone_index)
+	if not ztc_faction_utils.is_mod_enabled() or tamed_count == 0 then
+		return
+	end
+
+	if not who or not amount or amount <= 0 then
+		return
+	end
+
+	if victim and is_tamed(victim) then
+		rally_companions_against(who)
+	end
+end
+
 function ztc_faction_taming_save_state(mdata)
 	mdata[SAVE_KEY] = tamed_ids
 	mdata[SAVE_KEY_TEMPLATES] = companion_templates
+	mdata[SAVE_KEY_START_HEALTH] = companion_start_health
 end
 
 function ztc_faction_taming_load_state(mdata)
@@ -744,6 +1383,12 @@ function ztc_faction_taming_load_state(mdata)
 		companion_templates = mdata[SAVE_KEY_TEMPLATES]
 	else
 		companion_templates = {}
+	end
+
+	if mdata and mdata[SAVE_KEY_START_HEALTH] then
+		companion_start_health = mdata[SAVE_KEY_START_HEALTH]
+	else
+		companion_start_health = {}
 	end
 
 	for section, count in pairs(companion_templates) do
@@ -768,19 +1413,21 @@ end
 
 local function refresh_runtime_companions(now)
 	for id, entry in pairs(tamed_ids) do
-		local lobj = level.object_by_id(id)
-		if is_alive_obj(lobj) and type(entry) == "table" and (not entry.section or lobj:section() == entry.section) then
-			entry.last_seen = now
-			entry.pending_until = nil
+		if type(entry) ~= "table" then
 		else
-			local pending_until = type(entry) == "table" and entry.pending_until or nil
-			if pending_until and now < pending_until then
-				-- wait for spawned companion to materialize before treating it as missing
-			else
-				local last_seen = type(entry) == "table" and entry.last_seen or 0
-				if (now - last_seen) > 5000 then
-					unmark_tamed(id, false)
-				end
+			local lobj = level.object_by_id(id)
+			if is_alive_obj(lobj) and (not entry.section or lobj:section() == entry.section) then
+				entry.last_seen = now
+				entry.pending_until = nil
+			elseif entry.pending_until and now < entry.pending_until then
+				-- spawned companion has not come online yet
+			elseif alife_object(id) then
+				entry.last_seen = now
+			elseif entry.section and (companion_templates[entry.section] or 0) > 0 then
+				-- keep template slot; restore will respawn a replacement
+				unmark_tamed(id, false)
+			elseif (now - (entry.last_seen or 0)) > 60000 then
+				unmark_tamed(id, false)
 			end
 		end
 	end
@@ -897,9 +1544,166 @@ function ztc_faction_taming_is_tamed(obj)
 	return is_tamed(obj)
 end
 
+function ztc_faction_taming_get_tamed_companion_ids()
+	local t = {}
+	local n = 0
+
+	for id, entry in pairs(tamed_ids) do
+		if type(entry) == "table" then
+			n = n + 1
+			t[n] = id
+		end
+	end
+
+	table.sort(t)
+	return t
+end
+
+function ztc_faction_taming_get_tamed_count()
+	return tamed_count
+end
+
+function ztc_faction_taming_get_tamed_entry(id)
+	if not id then
+		return nil
+	end
+
+	local entry = tamed_ids[id]
+	if type(entry) == "table" then
+		return entry
+	end
+
+	return nil
+end
+
+function ztc_faction_taming_can_use_sit_follow()
+	if not ztc_faction_utils.is_mod_enabled() then
+		return false
+	end
+
+	if not ztc_faction_utils.actor_is_sin() then
+		return false
+	end
+
+	return tamed_count > 0
+end
+
+function ztc_faction_taming_is_sitting(id)
+	return is_sitting(id)
+end
+
+
+function ztc_faction_taming_toggle_sit_follow(obj)
+	if not ztc_faction_taming_can_use_sit_follow() then
+		return
+	end
+
+	if obj and is_tamed(obj) then
+		local id = obj:id()
+		local sit = not is_sitting(id)
+		set_sitting(obj, sit)
+		if sit then
+			show_command_feedback("st_ztc_sin_companion_sit", "Mutant companion: Sit")
+		else
+			show_command_feedback("st_ztc_sin_companion_follow", "Mutant companion: Follow")
+		end
+		return
+	end
+
+	local any_following = false
+	for id, entry in pairs(tamed_ids) do
+		if type(entry) == "table" and not is_sitting(id) then
+			any_following = true
+			break
+		end
+	end
+
+	local sit_all = any_following
+	for id, entry in pairs(tamed_ids) do
+		if type(entry) == "table" then
+			local lobj = get_object_by_id(id)
+			if is_alive_obj(lobj) then
+				set_sitting(lobj, sit_all)
+			else
+				entry.sitting = sit_all or nil
+			end
+		end
+	end
+
+	if sit_all then
+		show_command_feedback("st_ztc_sin_companion_all_sit", "All companions: Sit")
+	else
+		show_command_feedback("st_ztc_sin_companion_all_follow", "All companions: Follow")
+	end
+end
+
+function ztc_faction_taming_set_all_sit_follow(sit)
+	if not ztc_faction_taming_can_use_sit_follow() then
+		return
+	end
+
+	for id, entry in pairs(tamed_ids) do
+		if type(entry) == "table" then
+			local lobj = get_object_by_id(id)
+			if is_alive_obj(lobj) then
+				set_sitting(lobj, sit == true)
+			else
+				entry.sitting = sit == true or nil
+			end
+		end
+	end
+end
+
+function ztc_faction_taming_grant_start_companion(section)
+	if not ztc_faction_utils.actor_is_valid() or not alife then
+		return false
+	end
+
+	if not section or not ini_sys or not ini_sys:section_exist(section) then
+		return false
+	end
+
+	if not is_tamable_section(section) then
+		return false
+	end
+
+	local max_companions = 3
+	if ztc_faction_mcm and ztc_faction_mcm.get_config then
+		max_companions = ztc_faction_mcm.get_config("sin_max_companions") or 3
+	end
+
+	if count_templates_total() >= max_companions then
+		return false
+	end
+
+	local actor = db.actor
+	local spawn_pos = build_follow_position(actor, 1)
+	local sobj = alife():create(section, spawn_pos, actor:level_vertex_id(), actor:game_vertex_id())
+	if not sobj then
+		return false
+	end
+
+	add_template(section)
+	local health_mult = get_start_blind_dog_health_mult()
+	companion_start_health[section] = health_mult
+	mark_tamed_by_id(sobj.id, section, true, health_mult)
+	next_follow_tick[sobj.id] = 0
+	transition_restore_mode = true
+	next_restore_check_ts = 0
+	return true
+end
+
 function on_game_start()
 	_G.ztc_faction_taming = _G.ztc_faction_taming or {}
 	_G.ztc_faction_taming.is_tamed = ztc_faction_taming_is_tamed
+	_G.ztc_faction_taming.get_tamed_companion_ids = ztc_faction_taming_get_tamed_companion_ids
+	_G.ztc_faction_taming.get_tamed_count = ztc_faction_taming_get_tamed_count
+	_G.ztc_faction_taming.get_tamed_entry = ztc_faction_taming_get_tamed_entry
+	_G.ztc_faction_taming.grant_start_companion = ztc_faction_taming_grant_start_companion
+	_G.ztc_faction_taming.can_use_sit_follow = ztc_faction_taming_can_use_sit_follow
+	_G.ztc_faction_taming.is_sitting = ztc_faction_taming_is_sitting
+	_G.ztc_faction_taming.toggle_sit_follow = ztc_faction_taming_toggle_sit_follow
+	_G.ztc_faction_taming.set_all_sit_follow = ztc_faction_taming_set_all_sit_follow
 
 	RegisterScriptCallback("on_level_changing", ztc_faction_taming_on_level_changing)
 	RegisterScriptCallback("monster_on_net_spawn", ztc_faction_taming_monster_on_net_spawn)
@@ -909,6 +1713,12 @@ function on_game_start()
 	RegisterScriptCallback("actor_on_first_update", ztc_faction_taming_actor_on_first_update)
 	RegisterScriptCallback("actor_on_update", ztc_faction_taming_actor_on_update)
 	RegisterScriptCallback("on_enemy_eval", ztc_faction_taming_on_enemy_eval)
+	RegisterScriptCallback("npc_on_fighting_actor", ztc_faction_taming_on_fighting_actor)
+	RegisterScriptCallback("actor_on_weapon_fired", ztc_faction_taming_actor_on_weapon_fired)
+	RegisterScriptCallback("actor_on_hit_callback", ztc_faction_taming_actor_on_hit_callback)
+	RegisterScriptCallback("monster_on_hit_callback", ztc_faction_taming_monster_on_hit_callback)
 	RegisterScriptCallback("save_state", ztc_faction_taming_save_state)
 	RegisterScriptCallback("load_state", ztc_faction_taming_load_state)
+
+	CreateTimeEvent(COMPANION_REGEN_EVENT, "tick", COMPANION_REGEN_INTERVAL_SEC_DEFAULT, ztc_faction_taming_companion_regen_timer)
 end

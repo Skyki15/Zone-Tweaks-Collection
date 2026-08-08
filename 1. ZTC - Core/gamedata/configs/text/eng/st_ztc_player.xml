@@ -23,4 +23,40 @@
 	<string id="ui_mcm_ztc_player_stamina_thirst_multiplier_desc">
 		<text>How much losing stamina increases dehydration. 0 = off (vanilla thirst only). Requires thirst gameplay enabled in difficulty settings. Higher values make sprinting and heavy load drain hydration faster.</text>
 	</string>
+
+	<string id="ui_mcm_ztc_player_stamina_hunger_multiplier">
+		<text>Stamina to hunger linkage</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_stamina_hunger_multiplier_desc">
+		<text>How much losing stamina increases hunger. 0 = off (vanilla satiety only). Higher values make sprinting and heavy load drain satiety faster.</text>
+	</string>
+
+	<string id="ui_mcm_menu_bleeding">
+		<text>Bleeding</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleeding_title">
+		<text>Bleeding</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleeding_damage_desc">
+		<text>Scales how quickly bleeding drains the actor's health. 1.0 = vanilla. Higher values make open wounds more lethal.</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleed_damage_multiplier">
+		<text>Bleed damage multiplier</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleed_damage_multiplier_desc">
+		<text>Multiplies bleed health loss on the player. Range 1.0 (vanilla) to 3.0 (triple damage).</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleed_heal_rate_multiplier">
+		<text>Wound heal rate</text>
+	</string>
+
+	<string id="ui_mcm_ztc_player_bleed_heal_rate_multiplier_desc">
+		<text>Scales how quickly open wounds clot and stop bleeding on their own. 1.0 = vanilla. Higher values heal bleeds faster; lower values slow natural recovery.</text>
+	</string>
 </string_table>

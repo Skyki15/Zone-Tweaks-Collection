@@ -23,7 +23,7 @@ function capture.capture_fresh_start()
 		faction = config:r_value("character_creation", "new_game_faction", 3)
 	end
 
-	if faction == "bandit" or faction == "renegade" or faction == "freedom" or faction == "dolg" or faction == "army" or faction == "isg" then
+	if faction == "bandit" or faction == "renegade" or faction == "freedom" or faction == "dolg" or faction == "army" or faction == "isg" or faction == "greh" then
 		state[STORAGE_FRESH_FACTION] = faction
 	end
 end

@@ -5,15 +5,20 @@ local mcm = _G.ztc_player_mcm
 
 local MCM_ROOT = "ztc/player_tweaks/"
 local SUB_STAMINA = "stamina/"
+local SUB_BLEEDING = "bleeding/"
 
 local defaults = {
 	stamina_thirst_multiplier = 0,
+	stamina_hunger_multiplier = 0,
+	bleed_damage_multiplier = 1,
+	bleed_heal_rate_multiplier = 1,
 }
 
 function mcm.get_config(key)
 	if ui_mcm then
 		local paths = {
 			MCM_ROOT .. SUB_STAMINA .. key,
+			MCM_ROOT .. SUB_BLEEDING .. key,
 			MCM_ROOT .. key,
 		}
 		for i = 1, #paths do
@@ -61,6 +66,60 @@ function mcm.build_stamina_menu()
 				def = defaults.stamina_thirst_multiplier,
 				hint = "ztc_player_stamina_thirst_multiplier",
 			},
+			{
+				id = "stamina_hunger_multiplier",
+				type = "track",
+				val = 2,
+				min = 0,
+				max = 5,
+				step = 0.1,
+				def = defaults.stamina_hunger_multiplier,
+				hint = "ztc_player_stamina_hunger_multiplier",
+			},
+		},
+	}
+end
+
+function mcm.build_bleeding_menu()
+	return {
+		id = "bleeding",
+		sh = true,
+		gr = {
+			{
+				id = "title",
+				type = "slide",
+				link = "ui_options_slider_disguise",
+				text = "ui_mcm_ztc_player_bleeding_title",
+				size = {512, 50},
+				spacing = 20,
+			},
+			{
+				id = "bleeding_damage_desc",
+				type = "desc",
+				text = "ui_mcm_ztc_player_bleeding_damage_desc",
+				clr = {255, 200, 200, 200},
+			},
+			{ id = "divider_bleeding_main", type = "line" },
+			{
+				id = "bleed_damage_multiplier",
+				type = "track",
+				val = 2,
+				min = 1,
+				max = 3,
+				step = 0.1,
+				def = defaults.bleed_damage_multiplier,
+				hint = "ztc_player_bleed_damage_multiplier",
+			},
+			{
+				id = "bleed_heal_rate_multiplier",
+				type = "track",
+				val = 2,
+				min = 0.25,
+				max = 3,
+				step = 0.05,
+				def = defaults.bleed_heal_rate_multiplier,
+				hint = "ztc_player_bleed_heal_rate_multiplier",
+			},
 		},
 	}
 end
@@ -70,6 +129,7 @@ function mcm.build_player_tweaks_menu()
 		id = "player_tweaks",
 		gr = {
 			mcm.build_stamina_menu(),
+			mcm.build_bleeding_menu(),
 		},
 	}
 end

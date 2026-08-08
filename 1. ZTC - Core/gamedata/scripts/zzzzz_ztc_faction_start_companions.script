@@ -129,6 +129,24 @@ local function ztc_start_companions_actor_matches_faction(faction, actor_com)
 	return cfg.communities[actor_com] == true
 end
 
+local function ztc_start_companions_is_test_area()
+	if IsTestMode then
+		local ok, result = pcall(IsTestMode)
+		if ok and result then
+			return true
+		end
+	end
+
+	if level and level.name then
+		local ok, lvl = pcall(level.name)
+		if ok and lvl == "fake_start" then
+			return true
+		end
+	end
+
+	return false
+end
+
 local function ztc_start_companions_companions_active()
 	if axr_companions and axr_companions.Enabled then
 		return true
@@ -138,6 +156,72 @@ local function ztc_start_companions_companions_active()
 		return ini and ini:r_bool_ex("main", "enable", false)
 	end)
 	return ok and enabled == true
+end
+
+local function ztc_start_companions_can_offer_feature(faction)
+	if not ztc_start_companions_is_supported_faction(faction) then
+		return false
+	end
+	if not ztc_start_companions_faction_toggle_enabled(faction) then
+		return false
+	end
+	if not ztc_start_companions_companions_active() then
+		return false
+	end
+	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
+		return false
+	end
+	if not ztc_start_companions_actor_matches_faction(faction, ztc_faction_utils.get_actor_community(db.actor)) then
+		return false
+	end
+	if not SQUAD_SECTIONS[faction] then
+		return false
+	end
+	return true
+end
+
+local schedule_wait_active = false
+
+local function ztc_start_companions_get_target_rank()
+	if ztc_faction_utils and ztc_faction_utils.actor_is_valid and ztc_faction_utils.actor_is_valid() then
+		local ok, rank = pcall(function()
+			if db.actor.character_rank then
+				return db.actor:character_rank()
+			end
+			return nil
+		end)
+		if ok and rank then
+			return rank
+		end
+	end
+
+	if ranks and ranks.get_rank_interval then
+		local interval = ranks.get_rank_interval("novice")
+		if interval and interval[1] then
+			return interval[1]
+		end
+	end
+
+	return 0
+end
+
+local function ztc_start_companions_apply_rank(se_obj, online_npc)
+	local target_rank = ztc_start_companions_get_target_rank()
+	if not target_rank then
+		return
+	end
+
+	if se_obj and se_obj.set_rank then
+		pcall(function()
+			se_obj:set_rank(target_rank)
+		end)
+	end
+
+	if online_npc and online_npc.set_character_rank then
+		pcall(function()
+			online_npc:set_character_rank(target_rank)
+		end)
+	end
 end
 
 local function ztc_start_companions_prepare_companion_api()
@@ -284,6 +368,7 @@ local function ztc_start_companions_try_recruit_id(npc_id)
 		elseif dialogs_axr_companion and dialogs_axr_companion.become_actor_companion then
 			dialogs_axr_companion.become_actor_companion(db.actor, npc)
 		end
+		ztc_start_companions_apply_rank(alife_object(npc_id), npc)
 	end)
 
 	if ok then
@@ -318,6 +403,7 @@ local function ztc_start_companions_spawn_survival_squad(section)
 			local se_obj = k.object or (k.id and alife_object(k.id))
 			if se_obj and k.id then
 				SIMBOARD:setup_squad_and_group(se_obj)
+				ztc_start_companions_apply_rank(se_obj, nil)
 				se_save_var(se_obj.id, se_obj:name(), "companion", true)
 				pending_recruit_ids[k.id] = true
 				spawned = true
@@ -365,6 +451,11 @@ end
 
 function ztc_start_companions_try_spawn()
 	if not ztc_faction_utils or not ztc_faction_utils.actor_is_valid or not ztc_faction_utils.actor_is_valid() then
+		return true
+	end
+
+	if ztc_start_companions_is_test_area() then
+		CreateTimeEvent(EVENT_NAME, "spawn", 2, ztc_start_companions_try_spawn)
 		return true
 	end
 
@@ -440,6 +531,51 @@ function ztc_start_companions_try_spawn()
 	return true
 end
 
+function ztc_start_companions_try_schedule_spawn()
+	if spawn_scheduled or load_var(db.actor, SAVE_KEY) == true then
+		schedule_wait_active = false
+		return true
+	end
+
+	if ztc_start_companions_is_test_area() then
+		if not schedule_wait_active then
+			schedule_wait_active = true
+			CreateTimeEvent(EVENT_NAME, "wait_leave_test", 0.5, ztc_start_companions_try_schedule_spawn)
+		end
+		return true
+	end
+
+	schedule_wait_active = false
+
+	local faction = ztc_start_companions_resolve_faction()
+	if not faction or not ztc_start_companions_is_supported_faction(faction) then
+		return true
+	end
+
+	if not ztc_start_companions_faction_toggle_enabled(faction) then
+		ztc_start_companions_clear_fresh_faction()
+		return true
+	end
+
+	if not ztc_start_companions_mcm_master_enabled() then
+		ztc_start_companions_notify("st_ztc_start_companions_mcm_off")
+		return true
+	end
+
+	if not ztc_start_companions_can_offer_feature(faction) then
+		if not ztc_start_companions_companions_active() then
+			ztc_start_companions_notify("st_ztc_start_companions_disabled")
+		end
+		ztc_start_companions_clear_fresh_faction()
+		return true
+	end
+
+	spawn_scheduled = true
+	ztc_start_companions_notify("st_ztc_start_companions_pending")
+	CreateTimeEvent(EVENT_NAME, "spawn", 5, ztc_start_companions_try_spawn)
+	return true
+end
+
 function ztc_start_companions_on_npc_net_spawn(npc, se_obj)
 	if not se_obj or not pending_recruit_ids[se_obj.id] then
 		return
@@ -461,12 +597,7 @@ function ztc_start_companions_actor_on_first_update()
 	end
 
 	local faction = ztc_start_companions_resolve_faction()
-	if not faction then
-		return
-	end
-
-	if not ztc_start_companions_mcm_master_enabled() then
-		ztc_start_companions_notify("st_ztc_start_companions_mcm_off")
+	if not faction or not ztc_start_companions_is_supported_faction(faction) then
 		return
 	end
 
@@ -474,9 +605,7 @@ function ztc_start_companions_actor_on_first_update()
 		return
 	end
 
-	spawn_scheduled = true
-	ztc_start_companions_notify("st_ztc_start_companions_pending")
-	CreateTimeEvent(EVENT_NAME, "spawn", 5, ztc_start_companions_try_spawn)
+	ztc_start_companions_try_schedule_spawn()
 end
 
 function on_game_start()

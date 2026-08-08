@@ -1,0 +1,278 @@
+-- Zone Tweaks Collection — Sin: tamed mutant companion health HUD (vanilla companion_list style).
+
+local HUD_UPDATE_MS = 2000
+local HUD_ANCHOR_X = 949
+local HUD_ANCHOR_Y = 47
+local HUD_MAX_SLOTS = 10
+local HUD_SLOT_GAP = 10
+
+local ENCYCLO_KIND_STRINGS = {
+	dog = "encyclopedia_mutants_blind_dog",
+	bloodsucker = "encyclopedia_mutants_bloodsucker",
+	boar = "encyclopedia_mutants_boar",
+	burer = "encyclopedia_mutants_burer",
+	cat = "encyclopedia_mutants_cat",
+	chimera = "encyclopedia_mutants_chimera",
+	controller = "encyclopedia_mutants_controller",
+	bird = "encyclopedia_mutants_crow",
+	flesh = "encyclopedia_mutants_flesh",
+	fracture = "encyclopedia_mutants_fracture",
+	pseudodog = "encyclopedia_mutants_pseudodog",
+	giant = "encyclopedia_mutants_pseudogiant",
+	snork = "encyclopedia_mutants_snork",
+	tushkano = "encyclopedia_mutants_tushkano",
+	zombie = "encyclopedia_mutants_zombie",
+	SM_KARLIK = "encyclopedia_mutants_karlik",
+	SM_LURKER = "encyclopedia_mutants_lurker",
+	SM_POLTER_G = "encyclopedia_mutants_poltergeist",
+	SM_PYRO_G = "encyclopedia_mutants_pyrogeist",
+	SM_PSEUDO_G = "encyclopedia_mutants_pseudogeist",
+	SM_PSYSUCKER = "encyclopedia_mutants_psysucker",
+}
+
+local ztc_sin_mutant_hud_instance = nil
+
+function ztc_sin_mutant_hud_is_enabled()
+	if ztc_faction_mcm and ztc_faction_mcm.get_config then
+		local val = ztc_faction_mcm.get_config("sin_mutant_companion_hud_enabled")
+		if val ~= nil then
+			return val == true
+		end
+	end
+	return true
+end
+
+function ztc_sin_mutant_hud_get_max_slots()
+	local max_slots = 3
+	if ztc_faction_mcm and ztc_faction_mcm.get_config then
+		max_slots = tonumber(ztc_faction_mcm.get_config("sin_max_companions")) or max_slots
+	end
+	if max_slots < 1 then
+		max_slots = 1
+	elseif max_slots > HUD_MAX_SLOTS then
+		max_slots = HUD_MAX_SLOTS
+	end
+	return max_slots
+end
+
+function ztc_sin_mutant_hud_vanilla_companion_count()
+	if axr_companions and axr_companions.list_actor_squad_by_id then
+		return #axr_companions.list_actor_squad_by_id()
+	end
+	return 0
+end
+
+function ztc_sin_mutant_hud_should_show()
+	if not ztc_faction_utils or not ztc_faction_utils.is_mod_enabled() then
+		return false
+	end
+	if not ztc_faction_utils.actor_is_sin() then
+		return false
+	end
+	if not ztc_sin_mutant_hud_is_enabled() then
+		return false
+	end
+	if not ztc_faction_taming or not ztc_faction_taming.get_tamed_count then
+		return false
+	end
+	return ztc_faction_taming.get_tamed_count() > 0
+end
+
+function ztc_sin_mutant_hud_get_icon_texture(section)
+	if not section then
+		return "ui\\ui_noise"
+	end
+
+	if string.find(section, "rotan", 1, true) then
+		return "encyclopedia_mutants_rat_image"
+	end
+	if string.find(section, "psy_dog", 1, true) then
+		return "encyclopedia_mutants_psydog_image"
+	end
+
+	local kind = ini_sys:r_string_ex(section, "kind") or ini_sys:r_string_ex(section, "species")
+	local str_id = kind and ENCYCLO_KIND_STRINGS[kind]
+	if str_id then
+		return str_id .. "_image"
+	end
+
+	return "ui\\ui_noise"
+end
+
+function ztc_sin_mutant_hud_health_fraction(obj, entry)
+	if not obj then
+		return 0
+	end
+
+	return clamp(round_idp(obj.health or 0, 1), 0, 1)
+end
+
+function ztc_sin_mutant_hud_in_combat(obj)
+	if not obj or not obj.get_enemy then
+		return false
+	end
+
+	local enemy = obj:get_enemy()
+	if not enemy then
+		return false
+	end
+
+	if ztc_faction_taming and ztc_faction_taming.is_tamed and ztc_faction_taming.is_tamed(enemy) then
+		return false
+	end
+
+	return true
+end
+
+function ztc_sin_mutant_hud_get_companion_ids()
+	if ztc_faction_taming and ztc_faction_taming.get_tamed_companion_ids then
+		return ztc_faction_taming.get_tamed_companion_ids()
+	end
+	return {}
+end
+
+function ztc_sin_mutant_hud_reposition_dialog(hud)
+	if not hud or not hud.dialog then
+		return
+	end
+
+	local vanilla_count = ztc_sin_mutant_hud_vanilla_companion_count()
+	local slot_step = (hud.slot_height or 67) + HUD_SLOT_GAP
+	hud.dialog:SetWndPos(vector2():set(HUD_ANCHOR_X, HUD_ANCHOR_Y + vanilla_count * slot_step))
+end
+
+function ztc_sin_mutant_hud_update(force)
+	if ztc_sin_mutant_hud_instance then
+		ztc_sin_mutant_hud_instance:Update(force)
+	end
+end
+
+function ztc_sin_mutant_hud_actor_on_net_destroy()
+	if ztc_sin_mutant_hud_instance then
+		get_hud():RemoveDialogToRender(ztc_sin_mutant_hud_instance)
+		ztc_sin_mutant_hud_instance = nil
+	end
+end
+
+function ztc_sin_mutant_hud_on_console_execute(name)
+	if name == "hud_draw" then
+		ztc_sin_mutant_hud_update(true)
+	end
+end
+
+function ztc_sin_mutant_hud_activate()
+	RegisterScriptCallback("actor_on_net_destroy", ztc_sin_mutant_hud_actor_on_net_destroy)
+	RegisterScriptCallback("on_console_execute", ztc_sin_mutant_hud_on_console_execute)
+	RegisterScriptCallback("GUI_on_show", ztc_sin_mutant_hud_update)
+	RegisterScriptCallback("GUI_on_hide", ztc_sin_mutant_hud_update)
+
+	if ztc_sin_mutant_hud_instance == nil then
+		ztc_sin_mutant_hud_instance = UIZtcSinMutantCompanionList()
+		get_hud():AddDialogToRender(ztc_sin_mutant_hud_instance)
+	end
+end
+
+function ztc_sin_mutant_hud_actor_on_first_update()
+	if ztc_faction_utils and ztc_faction_utils.is_mod_enabled() and ztc_faction_utils.actor_is_sin() then
+		ztc_sin_mutant_hud_activate()
+	end
+end
+
+class "UIZtcSinMutantCompanionList" (CUIScriptWnd)
+
+function UIZtcSinMutantCompanionList:__init() super()
+	self.companion_info = {}
+	self._tmr = time_global()
+	self.update_rate = HUD_UPDATE_MS
+	self.slot_height = 67
+	self:InitControls()
+end
+
+function UIZtcSinMutantCompanionList:__finalize()
+end
+
+function UIZtcSinMutantCompanionList:InitControls()
+	local xml = utils_xml.get_hud_xml()
+
+	self.dialog = xml:InitStatic("companion_list", self)
+
+	self.companion_info = {}
+	for i = 1, HUD_MAX_SLOTS do
+		self.companion_info[i] = {}
+		self.companion_info[i].base = xml:InitStatic("companion_list:slot", self.dialog)
+		self.companion_info[i].background = xml:InitStatic("companion_list:slot:background", self.companion_info[i].base)
+		self.companion_info[i].icon = xml:InitStatic("companion_list:slot:icon", self.companion_info[i].base)
+		self.companion_info[i].danger_indicator = xml:InitStatic("companion_list:slot:danger_indicator", self.companion_info[i].base)
+		self.companion_info[i].team_role_shadow = xml:InitStatic("companion_list:slot:team_role", self.companion_info[i].base)
+		self.companion_info[i].team_role = xml:InitStatic("companion_list:slot:team_role", self.companion_info[i].base)
+		self.companion_info[i].distance = xml:InitTextWnd("companion_list:slot:distance", self.companion_info[i].base)
+		self.companion_info[i].prog_health = xml:InitProgressBar("companion_list:slot:health", self.companion_info[i].base)
+
+		for _, ele in pairs(self.companion_info[i]) do
+			utils_xml.correct_ratio(ele)
+		end
+
+		local h = self.companion_info[i].background:GetHeight()
+		self.slot_height = h
+		self.companion_info[i].distance:SetFont(GetFontSmall())
+		self.companion_info[i].base:SetWndPos(vector2():set(0, (HUD_MAX_SLOTS - i) * (h + HUD_SLOT_GAP)))
+		self.companion_info[i].team_role:Show(false)
+		self.companion_info[i].team_role_shadow:Show(false)
+		self.companion_info[i].base:Show(false)
+	end
+
+	ztc_sin_mutant_hud_reposition_dialog(self)
+end
+
+function UIZtcSinMutantCompanionList:Update(force)
+	CUIScriptWnd.Update(self)
+
+	local tg = time_global()
+	if force then
+		self._tmr = tg - 1
+	end
+	if self._tmr >= tg then
+		return
+	end
+	self._tmr = tg + self.update_rate
+
+	ztc_sin_mutant_hud_reposition_dialog(self)
+
+	local to_show = main_hud_shown() and ztc_sin_mutant_hud_should_show()
+	local clist = to_show and ztc_sin_mutant_hud_get_companion_ids() or {}
+	local max_slots = ztc_sin_mutant_hud_get_max_slots()
+
+	for i = 1, HUD_MAX_SLOTS do
+		local ele = self.companion_info[i]
+		if i > max_slots then
+			ele.base:Show(false)
+		else
+			local id = clist[i]
+			local se_obj = id and alife_object(id)
+			if to_show and se_obj and se_obj:alive() then
+				local st = db.storage[se_obj.id]
+				local npc = st and st.object
+				local section = se_obj:section_name()
+
+				ele.icon:InitTexture(ztc_sin_mutant_hud_get_icon_texture(section))
+				ele.distance:SetText(string.format("%.2f M", se_obj.position:distance_to(db.actor:position())))
+
+				if npc then
+					local entry = ztc_faction_taming and ztc_faction_taming.get_tamed_entry and ztc_faction_taming.get_tamed_entry(npc:id())
+					ele.prog_health:SetProgressPos(ztc_sin_mutant_hud_health_fraction(npc, entry))
+					ele.danger_indicator:Show(ztc_sin_mutant_hud_in_combat(npc))
+				else
+					ele.danger_indicator:Show(false)
+				end
+
+				ele.base:Show(true)
+			else
+				ele.base:Show(false)
+			end
+		end
+	end
+end
+
+function on_game_start()
+	RegisterScriptCallback("actor_on_first_update", ztc_sin_mutant_hud_actor_on_first_update)
+end
